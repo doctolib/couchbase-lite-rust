@@ -1,13 +1,20 @@
 [package]
 name = "couchbase_lite"
-version = "0.2.0"
+version = "0.2.1"
 
 [dependencies]
 enum_primitive = "*"
 tempdir = "*"
+lazy_static = "1.4.0"
+
+[dev-dependencies.cargo-husky]
+version = "1"
+default-features = false # Disable features which are enabled by default
+features = ["precommit-hook", "run-cargo-clippy", "run-cargo-fmt"]
 
 [build-dependencies]
-bindgen = "0.53.1"
+bindgen = "0.63"
+fs_extra = "1.2.0"
 
 [lib]
 bench = false
@@ -20,3 +27,7 @@ lto = true
 codegen-units = 1
 incremental = false
 # See: https://github.com/johnthagen/min-sized-rust
+
+[features]
+flaky-test = []
+unsafe-threads-test = []

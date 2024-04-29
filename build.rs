@@ -23,109 +23,284 @@
 // - https://doc.rust-lang.org/cargo/reference/build-scripts.html
 
 extern crate bindgen;
+extern crate fs_extra;
 
 use std::env;
+use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
+use fs_extra::dir;
 
-// Where to find the Couchbase Lite headers and library:    //TODO: Make this easily configurable
-static CBL_INCLUDE_DIR : &str   = "/usr/local/include";
-static CBL_LIB_DIR : &str       = "/usr/local/lib";
-static CBL_LIB_FILENAME : &str  = "libcblite.dylib";
+static CBL_INCLUDE_DIR: &str = "libcblite-3.0.3/include";
+static CBL_LIB_DIR: &str = "libcblite-3.0.3/lib";
 
-// Where to find Clang and LLVM libraries:
-static DEFAULT_LIBCLANG_PATH : &str = "/usr/local/Cellar/llvm/12.0.1/lib";
+fn main() -> Result<(), Box<dyn Error>> {
+    generate_bindings()?;
+    configure_rustc()?;
 
-static STATIC_LINK_CBL : bool = false;
-static CBL_SRC_DIR : &str = "../../CBL_C";
-
-fn main() {
-    // Set LIBCLANG_PATH environment variable if it's not already set:
-    if env::var("LIBCLANG_PATH").is_err() {
-        env::set_var("LIBCLANG_PATH", DEFAULT_LIBCLANG_PATH);
-        println!("cargo:rustc-env=LIBCLANG_PATH={}", DEFAULT_LIBCLANG_PATH);
+    // Bypass copying libraries when the build script is called in a cargo check context.
+    if env::var("ONLY_CARGO_CHECK").unwrap_or_default() != *"true" {
+        copy_lib().unwrap_or_else(|_| {
+            panic!(
+                "can't copy cblite libs, is '{}' a supported target?",
+                env::var("TARGET").unwrap_or_default()
+            )
+        });
     }
 
-    // The bindgen::Builder is the main entry point
-    // to bindgen, and lets you build up options for
-    // the resulting bindings.
-    let bindings = bindgen::Builder::default()
-        // The input header we would like to generate bindings for.
-        .header("src/wrapper.h")
-        // C '#include' search paths:
-        .clang_arg("-I".to_owned() + CBL_INCLUDE_DIR)
-        // Which symbols to generate bindings for:
-        .whitelist_type("CBL.*")
-        .whitelist_type("FL.*")
-        .whitelist_var("k?CBL.*")
-        .whitelist_var("k?FL.*")
-        .whitelist_function("CBL.*")
-        .whitelist_function("_?FL.*")
-        // Tell cargo to invalidate the built crate whenever any of the
-        // included header files changed.
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-        // Finish the builder and generate the bindings.
-        .generate()
-        // Unwrap the Result and panic on failure.
-        .expect("Unable to generate bindings");
+    Ok(())
+}
 
-    // Write the bindings to the $OUT_DIR/bindings.rs file.
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+fn bindgen_for_mac(builder: bindgen::Builder) -> Result<bindgen::Builder, Box<dyn Error>> {
+    let target = env::var("TARGET")?;
+    if !target.contains("apple") {
+        return Ok(builder);
+    }
+
+    let sdk = if target.contains("ios") {
+        if target.contains("x86") || target.contains("sim") {
+            "iphonesimulator"
+        } else {
+            "iphoneos"
+        }
+    } else {
+        "macosx"
+    };
+
+    let sdk = String::from_utf8(
+        Command::new("xcrun")
+            .args(["--sdk", sdk, "--show-sdk-path"])
+            .output()
+            .expect("failed to execute process")
+            .stdout,
+    )?;
+
+    Ok(builder.clang_arg(format!("-isysroot{}", sdk.trim())))
+}
+
+#[allow(dead_code)]
+enum OperatingSystem {
+    MacOs,
+    Windows,
+    Android,
+    IOs,
+}
+
+fn is_target(target: OperatingSystem) -> Result<bool, Box<dyn Error>> {
+    let target_os = env::var("CARGO_CFG_TARGET_OS")?;
+    Ok(match target {
+        OperatingSystem::Android => target_os.contains("android"),
+        OperatingSystem::Windows => target_os.contains("windows"),
+        OperatingSystem::IOs => target_os.contains("apple-ios"),
+        OperatingSystem::MacOs => target_os.contains("apple-darwin"),
+    })
+}
+
+fn is_host(host: OperatingSystem) -> Result<bool, Box<dyn Error>> {
+    let host_os = env::var("HOST")?;
+    Ok(match host {
+        OperatingSystem::MacOs => host_os.contains("apple-darwin"),
+        OperatingSystem::Windows => host_os.contains("windows"),
+        OperatingSystem::Android => host_os.contains("android"),
+        OperatingSystem::IOs => host_os.contains("apple-ios"),
+    })
+}
+
+fn generate_bindings() -> Result<(), Box<dyn Error>> {
+    let mut bindings = bindgen_for_mac(bindgen::Builder::default())?
+        .header("src/wrapper.h")
+        .clang_arg(format!("-I{}", CBL_INCLUDE_DIR));
+
+    // Fix cross-compilation from MacOS to Android targets.
+    // The following clang_arg calls prevent bindgen from trying to include
+    // MacOS standards headers and returning an error when trying to generate bindings.
+    // Basically, we specifiy NDK sysroot and usr/include dirs depending on the target arch.
+    //
+    // Sample of errors:
+    //
+    // /Applications/Xcode.app/.../Developer/SDKs/MacOSX10.15.sdk/usr/include/sys/cdefs.h:807:2: error: Unsupported architecture
+    // /Applications/Xcode.app/.../Developer/SDKs/MacOSX10.15.sdk/usr/include/machine/_types.h:34:2: error: architecture not supported
+    // FTR: https://github.com/rust-lang/rust-bindgen/issues/1780
+    if is_host(OperatingSystem::MacOs)? && is_target(OperatingSystem::Android)? {
+        let ndk_sysroot = format!(
+            "{}/toolchains/llvm/prebuilt/darwin-x86_64/sysroot",
+            env::var("NDK_HOME")?,
+        );
+        let target_triplet =
+            if env::var("CARGO_CFG_TARGET_ARCH").expect("Can't read target arch value!") == "arm" {
+                "arm-linux-androideabi"
+            } else {
+                "aarch64-linux-android"
+            };
+        bindings = bindings
+            .clang_arg(format!("--sysroot={}", ndk_sysroot))
+            .clang_arg(format!("-I{}/usr/include", ndk_sysroot))
+            .clang_arg(format!("-I{}/usr/include/{}", ndk_sysroot, target_triplet))
+            .clang_arg(format!("--target={}", target_triplet));
+    }
+
+    // Cross compiling from Mac to Windows
+    if is_host(OperatingSystem::MacOs)? && is_target(OperatingSystem::Windows)? {
+        let homebrew_prefix = Command::new("brew")
+            .arg("--prefix")
+            .arg("mingw-w64")
+            .output()?
+            .stdout;
+        let homebrew_prefix =
+            String::from_utf8_lossy(&homebrew_prefix[..homebrew_prefix.len() - 1]);
+        let mingw_path = format!("{homebrew_prefix}/toolchain-x86_64/x86_64-w64-mingw32");
+        let mingw_include_path = format!("{mingw_path}/include");
+        bindings = bindings
+            .clang_arg(format!("-I{}", mingw_include_path))
+            .clang_arg(format!("--target={}", "x86_64-pc-windows-gnu"));
+    }
+
+    let out_dir = env::var("OUT_DIR")?;
     bindings
-        .write_to_file(out_dir.join("bindings.rs"))
+        .allowlist_type("CBL.*")
+        .allowlist_type("FL.*")
+        .allowlist_var("k?CBL.*")
+        .allowlist_var("k?FL.*")
+        .allowlist_function("CBL.*")
+        .allowlist_function("_?FL.*")
+        .no_copy("FLSliceResult")
+        .size_t_is_usize(true)
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .generate()
+        .expect("Unable to generate bindings")
+        .write_to_file(PathBuf::from(out_dir).join("bindings.rs"))
         .expect("Couldn't write bindings!");
 
-    // Tell cargo to tell rustc to link the cblite library.
-    if STATIC_LINK_CBL {
-        // Link against the CBL-C and LiteCore static libraries for maximal efficienty.
-        // This assumes that a checkout of couchbase-lite-C exists at CBL_SRC_DIR
-        // and has been built with CMake.
-        // TODO: Currently, on Mac OS this requires manual processing of the static libraries
-        //       because Rust can't link with fat libraries. Thus all the libraries linked below
-        //       had to be thinned with e.g. `libXXX.a -thin x86_64 -output libXXX-x86.a`.
-        let cblite_src_path = PathBuf::from(CBL_SRC_DIR);
-        let root = cblite_src_path.to_str().unwrap();
-        
-        println!("cargo:rustc-link-search={}/build_cmake", root);
-        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core", root);
-        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/Networking/BLIP", root);
-        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/fleece", root);
-        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/mbedtls/library", root);
-        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/mbedtls/crypto/library", root);
-        println!("cargo:rustc-link-search={}/build_cmake/vendor/couchbase-lite-core/vendor/sqlite3-unicodesn", root);
+    Ok(())
+}
 
-        println!("cargo:rustc-link-lib=static=cblite-static-x86");
-        println!("cargo:rustc-link-lib=static=liteCoreStatic-x86");
-        println!("cargo:rustc-link-lib=static=liteCoreWebSocket-x86");
-        println!("cargo:rustc-link-lib=static=BLIPStatic-x86");
-        println!("cargo:rustc-link-lib=static=FleeceStatic-x86");
-        println!("cargo:rustc-link-lib=static=CouchbaseSqlite3-x86");
-        println!("cargo:rustc-link-lib=static=SQLite3_UnicodeSN-x86");
-        println!("cargo:rustc-link-lib=static=mbedcrypto-x86");
-        println!("cargo:rustc-link-lib=static=mbedtls-x86");
-        println!("cargo:rustc-link-lib=static=mbedx509-x86");
+fn configure_rustc() -> Result<(), Box<dyn Error>> {
+    println!("cargo:rerun-if-changed=src/wrapper.h");
+    println!("cargo:rerun-if-changed={}", CBL_INCLUDE_DIR);
+    println!("cargo:rerun-if-changed={}", CBL_LIB_DIR);
+    println!("cargo:rustc-link-search={}", env::var("OUT_DIR")?);
 
-        println!("cargo:rustc-link-lib=c++");
-        println!("cargo:rustc-link-lib=z");
+    let target_dir = env::var("TARGET")?;
+    let target_os = env::var("CARGO_CFG_TARGET_OS")?;
+    if target_os == "ios" {
+        let target_arch = env::var("CARGO_CFG_TARGET_ARCH").expect("Can't read target_arch");
+        let ios_framework = match target_arch.as_str() {
+            "aarch64" => "ios-arm64",
+            "x86_64" => "ios-arm64_x86_64-simulator",
+            _ => panic!("Unsupported ios target"),
+        };
 
-        // TODO: This only applies to Apple platforms:
-        println!("cargo:rustc-link-lib=framework=CoreFoundation");
-        println!("cargo:rustc-link-lib=framework=Foundation");
-        println!("cargo:rustc-link-lib=framework=CFNetwork");
-        println!("cargo:rustc-link-lib=framework=Security");
-        println!("cargo:rustc-link-lib=framework=SystemConfiguration");
-
-    } else {
-        // Link against and copy the CBL dynamic library:
-        let src = PathBuf::from(CBL_LIB_DIR).join(CBL_LIB_FILENAME);
-        let dst = out_dir.join(CBL_LIB_FILENAME);
-        println!("cargo:rerun-if-changed={}", src.to_str().unwrap());
-        fs::copy(src, dst).expect("copy dylib");
-        // Tell rustc to link it:
-        println!("cargo:rustc-link-search={}", out_dir.to_str().unwrap());
+        println!(
+            "cargo:rustc-link-search=framework={}/{}/ios/CouchbaseLite.xcframework/{}",
+            env!("CARGO_MANIFEST_DIR"),
+            CBL_LIB_DIR,
+            ios_framework,
+        );
+        println!("cargo:rustc-link-lib=framework=CouchbaseLite");
+    } else if target_os == "macos" {
         println!("cargo:rustc-link-lib=dylib=cblite");
+        println!(
+            "cargo:rustc-link-search={}/{}/macos",
+            env!("CARGO_MANIFEST_DIR"),
+            CBL_LIB_DIR
+        );
+    } else {
+        println!("cargo:rustc-link-lib=dylib=cblite");
+        println!(
+            "cargo:rustc-link-search={}/{}/{}",
+            env!("CARGO_MANIFEST_DIR"),
+            CBL_LIB_DIR,
+            target_dir
+        );
+    }
+    Ok(())
+}
+
+pub fn copy_lib() -> Result<(), Box<dyn Error>> {
+    let target_os = env::var("CARGO_CFG_TARGET_OS")?;
+    let lib_path = PathBuf::from(format!(
+        "{}/{}/{}/",
+        env!("CARGO_MANIFEST_DIR"),
+        CBL_LIB_DIR,
+        if target_os == "ios" {
+            "ios".to_string()
+        } else if target_os == "macos" {
+            "macos".to_string()
+        } else {
+            env::var("TARGET").unwrap()
+        }
+    ));
+    let dest_path = PathBuf::from(format!("{}/", env::var("OUT_DIR")?));
+
+    match target_os.as_str() {
+        "android" => {
+            fs::copy(
+                lib_path.join("libcblite.stripped.so"),
+                dest_path.join("libcblite.so"),
+            )?;
+        }
+        "ios" => {
+            let mut copy_options = dir::CopyOptions::new();
+            copy_options.overwrite = true;
+
+            dir::copy(
+                lib_path.join("CouchbaseLite.xcframework"),
+                dest_path,
+                &copy_options,
+            )?;
+        }
+        "linux" => {
+            fs::copy(
+                lib_path.join("libcblite.so.3"),
+                dest_path.join("libcblite.so.3"),
+            )?;
+            fs::copy(
+                lib_path.join("libicudata.so.66"),
+                dest_path.join("libicudata.so.66"),
+            )?;
+            fs::copy(
+                lib_path.join("libicui18n.so.66"),
+                dest_path.join("libicui18n.so.66"),
+            )?;
+            fs::copy(
+                lib_path.join("libicuio.so.66"),
+                dest_path.join("libicuio.so.66"),
+            )?;
+            fs::copy(
+                lib_path.join("libicutu.so.66"),
+                dest_path.join("libicutu.so.66"),
+            )?;
+            fs::copy(
+                lib_path.join("libicuuc.so.66"),
+                dest_path.join("libicuuc.so.66"),
+            )?;
+            // Needed only for build, not required for run
+            fs::copy(
+                lib_path.join("libcblite.so.3"),
+                dest_path.join("libcblite.so"),
+            )?;
+        }
+        "macos" => {
+            fs::copy(
+                lib_path.join("libcblite.3.dylib"),
+                dest_path.join("libcblite.3.dylib"),
+            )?;
+            // Needed only for build, not required for run
+            fs::copy(
+                lib_path.join("libcblite.3.dylib"),
+                dest_path.join("libcblite.dylib"),
+            )?;
+        }
+        "windows" => {
+            fs::copy(lib_path.join("cblite.dll"), dest_path.join("cblite.dll"))?;
+            // Needed only for build, not required for run
+            fs::copy(lib_path.join("cblite.lib"), dest_path.join("cblite.lib"))?;
+        }
+        _ => {
+            panic!("Unsupported target: {}", env::var("CARGO_CFG_TARGET_OS")?);
+        }
     }
 
-    // Tell cargo to invalidate the built crate whenever the wrapper changes
-    println!("cargo:rerun-if-changed=src/wrapper.h");
+    Ok(())
 }

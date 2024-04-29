@@ -1,0 +1,2 @@
+leak:libc
+leak:libstdc++
