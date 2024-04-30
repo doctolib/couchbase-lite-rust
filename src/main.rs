@@ -18,14 +18,16 @@
 extern crate couchbase_lite;
 extern crate tempdir;
 
-use couchbase_lite::*;
+use couchbase_lite::{ConcurrencyControl, Database, DatabaseConfiguration, Document, FleeceReference};
 use tempdir::TempDir;
-
 
 fn main() {
     // Create a new database in a temporary directory:
     let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
-    let cfg = DatabaseConfiguration{directory: tmp_dir.path()};
+    let cfg = DatabaseConfiguration {
+        directory: tmp_dir.path(),
+        encryption_key: None,
+    };
     let mut db = Database::open("main_db", Some(cfg)).expect("open db");
 
     // Create and save a new document:
@@ -36,7 +38,8 @@ fn main() {
         props.at("i").put_i64(1234);
         props.at("s").put_string("Hello World!");
 
-        db.save_document(&mut doc, ConcurrencyControl::FailOnConflict).expect("save");
+        db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
+            .expect("save");
     }
     // Reload the document and verify its properties:
     {

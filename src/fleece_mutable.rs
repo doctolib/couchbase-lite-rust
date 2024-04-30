@@ -15,142 +15,219 @@
 // limitations under the License.
 //
 
-use super::*;
-use super::slice::*;
-use super::c_api::*;
-use super::fleece::*;
+use crate::{
+    CblRef, CouchbaseLiteError, Error, ErrorCode, Result, encryptable,
+    slice::{from_bytes, from_str},
+    c_api::{
+        FLArray_AsMutable, FLArray_MutableCopy, FLDict_AsMutable, FLDict_MutableCopy,
+        FLMutableArray, FLMutableArray_Append, FLMutableArray_Insert, FLMutableArray_IsChanged,
+        FLMutableArray_New, FLMutableArray_Remove, FLMutableArray_Set, FLMutableDict,
+        FLMutableDict_IsChanged, FLMutableDict_New, FLMutableDict_Remove, FLMutableDict_RemoveAll,
+        FLMutableDict_Set, FLSlot, FLSlot_SetBool, FLSlot_SetDouble, FLSlot_SetEncryptableValue,
+        FLSlot_SetInt, FLSlot_SetNull, FLSlot_SetString, FLSlot_SetValue, FLValue, FLValue_Release,
+        FLValue_Retain,
+    },
+    fleece::{Array, ArrayIterator, Dict, DictIterator, DictKey, FleeceReference, Value},
+    encryptable::Encryptable,
+};
 
+use std::collections::HashMap;
 use std::fmt;
 use std::marker::PhantomData;
 use std::ptr;
 
-
-
+#[derive(Debug, Clone, Copy)]
 pub enum CopyFlags {
-    Default            = 0,     // Shallow copy of mutable values
-    Deep               = 1,     // Deep copy of mutable values
-    CopyImmutables     = 2,     // Make copies of immutable values too
-    DeepCopyImmutables = 3,     // The works
+    Default = 0,            // Shallow copy of mutable values
+    Deep = 1,               // Deep copy of mutable values
+    CopyImmutables = 2,     // Make copies of immutable values too
+    DeepCopyImmutables = 3, // The works
 }
-
 
 //////// MUTABLE ARRAY:
 
-
 pub struct MutableArray {
-    pub(crate) _ref: FLMutableArray,
+    pub(crate) cbl_ref: FLMutableArray,
+}
+
+impl CblRef for MutableArray {
+    type Output = FLMutableArray;
+    fn get_ref(&self) -> Self::Output {
+        self.cbl_ref
+    }
 }
 
 impl MutableArray {
-    pub fn new() -> MutableArray {
-        unsafe { MutableArray{_ref: FLMutableArray_New()} }
+    pub fn new() -> Self {
+        unsafe {
+            Self {
+                cbl_ref: FLMutableArray_New(),
+            }
+        }
     }
 
-    pub fn from_array(array: &Array) -> MutableArray {
-        MutableArray::from_array_(array, CopyFlags::Default)
+    pub fn from_array(array: &Array) -> Self {
+        Self::from_array_(array, CopyFlags::Default)
     }
 
-    pub fn from_array_(array: &Array, flags: CopyFlags) -> MutableArray {
-        unsafe { MutableArray{_ref: FLArray_MutableCopy(array._ref, flags as u32)} }
+    pub fn from_array_(array: &Array, flags: CopyFlags) -> Self {
+        unsafe {
+            Self {
+                cbl_ref: FLArray_MutableCopy(array.get_ref(), flags as u32),
+            }
+        }
     }
 
-    pub(crate) unsafe fn adopt(array: FLMutableArray) -> MutableArray {
+    pub(crate) unsafe fn adopt(array: FLMutableArray) -> Self {
         FLValue_Retain(array as FLValue);
-        return MutableArray{_ref: array};
+        Self { cbl_ref: array }
     }
 
     pub fn is_changed(&self) -> bool {
-        unsafe { FLMutableArray_IsChanged(self._ref) }
+        unsafe { FLMutableArray_IsChanged(self.get_ref()) }
     }
 
-    pub fn at<'s>(&'s mut self, index: u32) -> Slot<'s> {
-        unsafe { Slot{_ref: FLMutableArray_Set(self._ref, index), _owner: PhantomData} }
+    pub fn at(&mut self, index: u32) -> Option<Slot> {
+        if self.count() > index {
+            Some(unsafe {
+                Slot {
+                    cbl_ref: FLMutableArray_Set(self.get_ref(), index),
+                    owner: PhantomData,
+                }
+            })
+        } else {
+            None
+        }
     }
 
-    pub fn append<'s>(&'s mut self) -> Slot<'s> {
-        unsafe { Slot{_ref: FLMutableArray_Append(self._ref), _owner: PhantomData} }
+    pub fn append(&mut self) -> Slot {
+        unsafe {
+            Slot {
+                cbl_ref: FLMutableArray_Append(self.get_ref()),
+                owner: PhantomData,
+            }
+        }
     }
 
-    pub fn insert<'s>(&'s mut self, index: u32) {
-        unsafe { FLMutableArray_Insert(self._ref, index, 1) }
+    pub fn insert(&mut self, index: u32) -> Result<()> {
+        if self.count() > index {
+            unsafe { FLMutableArray_Insert(self.get_ref(), index, 1) }
+            Ok(())
+        } else {
+            Err(Error {
+                code: ErrorCode::CouchbaseLite(CouchbaseLiteError::MemoryError),
+                internal_info: None,
+            })
+        }
     }
 
     pub fn remove(&mut self, index: u32) {
-        unsafe { FLMutableArray_Remove(self._ref, index, 1) }
+        unsafe { FLMutableArray_Remove(self.get_ref(), index, 1) }
     }
 
     pub fn remove_all(&mut self) {
-        unsafe { FLMutableArray_Remove(self._ref, 0, self.count()) }
+        unsafe { FLMutableArray_Remove(self.get_ref(), 0, self.count()) }
     }
 }
 
 // "Inherited" API:
 impl MutableArray {
-    pub fn as_array(&self) -> Array          { Array::wrap(self._ref, self) }
-    pub fn count(&self) -> u32               { self.as_array().count() }
-    pub fn empty(&self) -> bool              { self.as_array().empty() }
-    pub fn get(&self, index: u32) -> Value   { self.as_array().get(index) }
-    pub fn iter(&self) -> ArrayIterator      { self.as_array().iter() }
+    pub fn as_array(&self) -> Array {
+        Array::wrap(self.get_ref())
+    }
+    pub fn count(&self) -> u32 {
+        self.as_array().count()
+    }
+    pub fn empty(&self) -> bool {
+        self.as_array().empty()
+    }
+    pub fn get(&self, index: u32) -> Value {
+        self.as_array().get(index)
+    }
+    pub fn iter(&self) -> ArrayIterator {
+        self.as_array().iter()
+    }
 }
 
 impl FleeceReference for MutableArray {
-    fn _fleece_ref(&self) -> FLValue { self._ref as FLValue }
+    fn _fleece_ref(&self) -> FLValue {
+        self.get_ref() as FLValue
+    }
 }
 
-impl Clone for MutableArray{
+impl Clone for MutableArray {
     fn clone(&self) -> Self {
-        unsafe{ return MutableArray{_ref: FLValue_Retain(self._ref as FLValue) as FLMutableArray} }
+        unsafe {
+            Self {
+                cbl_ref: FLValue_Retain(self.get_ref() as FLValue) as FLMutableArray,
+            }
+        }
     }
 }
 
 impl Drop for MutableArray {
     fn drop(&mut self) {
-        unsafe{ FLValue_Release(self._ref as FLValue); }
+        unsafe {
+            FLValue_Release(self.get_ref() as FLValue);
+        }
     }
 }
 
 impl Default for MutableArray {
-    fn default() -> MutableArray { MutableArray{_ref: ptr::null_mut()} }
+    fn default() -> Self {
+        Self {
+            cbl_ref: ptr::null_mut(),
+        }
+    }
 }
 
 impl PartialEq for MutableArray {
-    fn eq(&self, other: &Self) -> bool { self.as_value() == other.as_value() }
+    fn eq(&self, other: &Self) -> bool {
+        self.as_value() == other.as_value()
+    }
 }
 
-impl Eq for MutableArray { }
+impl Eq for MutableArray {}
 
 impl std::ops::Not for MutableArray {
     type Output = bool;
-    fn not(self) -> bool {self._ref.is_null()}
+    fn not(self) -> bool {
+        self.get_ref().is_null()
+    }
 }
 
 impl fmt::Debug for MutableArray {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("MutableArray")
-         .field("count", &self.count())
-         .finish()
+            .field("count", &self.count())
+            .finish()
     }
 }
 
 impl fmt::Display for MutableArray {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        return f.write_str(&self.as_value().to_json());
+        f.write_str(&self.as_value().to_json())
     }
 }
 
-impl<'a> IntoIterator for &'a MutableArray {
-    type Item = Value<'a>;
-    type IntoIter = ArrayIterator<'a>;
-    fn into_iter(self) -> Self::IntoIter { self.iter() }
+impl IntoIterator for MutableArray {
+    type Item = Value;
+    type IntoIter = ArrayIterator;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
 }
 
-
 // Mutable API additions for Array:
-impl<'d> Array<'d> {
+impl Array {
     pub fn as_mutable(self) -> Option<MutableArray> {
         unsafe {
-            let md = FLArray_AsMutable(self._ref);
-            return if md.is_null() { None } else { Some(MutableArray::adopt(md)) };
+            let md = FLArray_AsMutable(self.get_ref());
+            if md.is_null() {
+                None
+            } else {
+                Some(MutableArray::adopt(md))
+            }
         }
     }
 
@@ -159,117 +236,195 @@ impl<'d> Array<'d> {
     }
 }
 
-
 //////// MUTABLE DICT:
 
-
 pub struct MutableDict {
-    pub(crate) _ref: FLMutableDict,
+    pub(crate) cbl_ref: FLMutableDict,
+}
+
+impl CblRef for MutableDict {
+    type Output = FLMutableDict;
+    fn get_ref(&self) -> Self::Output {
+        self.cbl_ref
+    }
 }
 
 impl MutableDict {
-    pub fn new() -> MutableDict {
-        unsafe { MutableDict{_ref: FLMutableDict_New()} }
+    pub fn new() -> Self {
+        unsafe {
+            Self {
+                cbl_ref: FLMutableDict_New(),
+            }
+        }
     }
 
-    pub fn from_dict(dict: &Dict) -> MutableDict {
-        MutableDict::from_dict_(dict, CopyFlags::Default)
+    pub fn from_dict(dict: &Dict) -> Self {
+        Self::from_dict_(dict, CopyFlags::Default)
     }
 
-    pub fn from_dict_(dict: &Dict, flags: CopyFlags) -> MutableDict {
-        unsafe { MutableDict{_ref: FLDict_MutableCopy(dict._ref, flags as u32)} }
+    pub fn from_dict_(dict: &Dict, flags: CopyFlags) -> Self {
+        unsafe {
+            Self {
+                cbl_ref: FLDict_MutableCopy(dict.get_ref(), flags as u32),
+            }
+        }
     }
 
-    pub(crate) unsafe fn adopt(dict: FLMutableDict) -> MutableDict {
+    pub(crate) unsafe fn adopt(dict: FLMutableDict) -> Self {
         FLValue_Retain(dict as FLValue);
-        return MutableDict{_ref: dict};
+        Self { cbl_ref: dict }
     }
 
     pub fn is_changed(&self) -> bool {
-        unsafe { FLMutableDict_IsChanged(self._ref) }
+        unsafe { FLMutableDict_IsChanged(self.get_ref()) }
     }
 
     pub fn at<'s>(&'s mut self, key: &str) -> Slot<'s> {
-        unsafe { Slot{_ref: FLMutableDict_Set(self._ref, as_slice(key)), _owner: PhantomData} }
+        unsafe {
+            Slot {
+                cbl_ref: FLMutableDict_Set(self.get_ref(), from_str(key).get_ref()),
+                owner: PhantomData,
+            }
+        }
     }
 
     pub fn remove(&mut self, key: &str) {
-        unsafe { FLMutableDict_Remove(self._ref, as_slice(key)) }
+        unsafe { FLMutableDict_Remove(self.get_ref(), from_str(key).get_ref()) }
     }
 
     pub fn remove_all(&mut self) {
-        unsafe { FLMutableDict_RemoveAll(self._ref) }
+        unsafe { FLMutableDict_RemoveAll(self.get_ref()) }
+    }
+
+    pub fn to_hashmap(&self) -> HashMap<String, String> {
+        self.iter()
+            .map(|tuple| {
+                (
+                    tuple.0.to_string(),
+                    String::from(tuple.1.as_string().unwrap_or("")),
+                )
+            })
+            .collect::<HashMap<String, String>>()
+    }
+
+    pub fn set_encryptable_value(dict: &Self, key: &str, encryptable: &Encryptable) {
+        unsafe {
+            FLSlot_SetEncryptableValue(
+                FLMutableDict_Set(dict.get_ref(), from_str(key).get_ref()),
+                encryptable.get_ref(),
+            );
+        }
+    }
+
+    pub fn from_hashmap(map: &HashMap<String, String>) -> Self {
+        let mut dict = Self::new();
+        map.iter()
+            .for_each(|(key, value)| dict.at(key.as_str()).put_string(value.as_str()));
+        dict
     }
 }
 
 // "Inherited" API:
 impl MutableDict {
-    pub fn as_dict(&self) -> Dict                       { Dict::wrap(self._ref, self) }
-    pub fn count(&self) -> u32                          { self.as_dict().count() }
-    pub fn empty(&self) -> bool                         { self.as_dict().empty() }
-    pub fn get(&self, key: &str) -> Value               { self.as_dict().get(key) }
-    pub fn get_key(&self, key: &mut DictKey) -> Value   { self.as_dict().get_key(key) }
-    pub fn iter(&self) -> DictIterator                  { self.as_dict().iter() }
+    pub fn as_dict(&self) -> Dict {
+        Dict::wrap(self.get_ref(), self)
+    }
+    pub fn count(&self) -> u32 {
+        self.as_dict().count()
+    }
+    pub fn empty(&self) -> bool {
+        self.as_dict().empty()
+    }
+    pub fn get(&self, key: &str) -> Value {
+        self.as_dict().get(key)
+    }
+    pub fn get_key(&self, key: &mut DictKey) -> Value {
+        self.as_dict().get_key(key)
+    }
+    pub fn iter(&self) -> DictIterator {
+        self.as_dict().iter()
+    }
 }
 
 impl FleeceReference for MutableDict {
-    fn _fleece_ref(&self) -> FLValue { self._ref as FLValue }
+    fn _fleece_ref(&self) -> FLValue {
+        self.get_ref() as FLValue
+    }
 }
 
-impl Clone for MutableDict{
+impl Clone for MutableDict {
     fn clone(&self) -> Self {
-        unsafe{ return MutableDict{_ref: FLValue_Retain(self._ref as FLValue) as FLMutableDict} }
+        unsafe {
+            Self {
+                cbl_ref: FLValue_Retain(self.get_ref() as FLValue) as FLMutableDict,
+            }
+        }
     }
 }
 
 impl Drop for MutableDict {
     fn drop(&mut self) {
-        unsafe{ FLValue_Release(self._ref as FLValue); }
+        unsafe {
+            FLValue_Release(self.get_ref() as FLValue);
+        }
     }
 }
 
 impl Default for MutableDict {
-    fn default() -> MutableDict { MutableDict{_ref: ptr::null_mut()} }
+    fn default() -> Self {
+        Self {
+            cbl_ref: ptr::null_mut(),
+        }
+    }
 }
 
 impl PartialEq for MutableDict {
-    fn eq(&self, other: &Self) -> bool { self.as_value() == other.as_value() }
+    fn eq(&self, other: &Self) -> bool {
+        self.as_value() == other.as_value()
+    }
 }
 
-impl Eq for MutableDict { }
+impl Eq for MutableDict {}
 
 impl std::ops::Not for MutableDict {
     type Output = bool;
-    fn not(self) -> bool {self._ref.is_null()}
+    fn not(self) -> bool {
+        self.get_ref().is_null()
+    }
 }
 
 impl fmt::Debug for MutableDict {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("MutableDict")
-         .field("count", &self.count())
-         .finish()
+            .field("count", &self.count())
+            .finish()
     }
 }
 
 impl fmt::Display for MutableDict {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        return f.write_str(&self.as_value().to_json());
+        f.write_str(&self.as_value().to_json())
     }
 }
 
-impl<'a> IntoIterator for &'a MutableDict {
-    type Item = (&'a str, Value<'a>);
-    type IntoIter = DictIterator<'a>;
-    fn into_iter(self) -> Self::IntoIter { self.iter() }
+impl IntoIterator for MutableDict {
+    type Item = (String, Value);
+    type IntoIter = DictIterator;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
 }
 
-
 // Mutable API for Dict:
-impl<'d> Dict<'d> {
+impl Dict {
     pub fn as_mutable(self) -> Option<MutableDict> {
         unsafe {
-            let md = FLDict_AsMutable(self._ref);
-            return if md.is_null() { None } else { Some(MutableDict::adopt(md)) };
+            let md = FLDict_AsMutable(self.get_ref());
+            if md.is_null() {
+                None
+            } else {
+                Some(MutableDict::adopt(md))
+            }
         }
     }
 
@@ -278,39 +433,52 @@ impl<'d> Dict<'d> {
     }
 }
 
-
 //////// SLOT:
 
-
 /** A reference to an element of a MutableArray or MutableDict,
-    for the sole purpose of storing a value in it. */
+for the sole purpose of storing a value in it. */
 pub struct Slot<'s> {
-    pub(crate) _ref: FLSlot,
-    _owner: PhantomData<&'s mut MutableDict>
+    pub(crate) cbl_ref: FLSlot,
+    owner: PhantomData<&'s mut MutableDict>,
+}
+
+impl<'s> CblRef for Slot<'s> {
+    type Output = FLSlot;
+    fn get_ref(&self) -> Self::Output {
+        self.cbl_ref
+    }
 }
 
 impl<'s> Slot<'s> {
-    pub fn put_null(self)                 { unsafe { FLSlot_SetNull(self._ref) } }
+    pub fn put_null(self) {
+        unsafe { FLSlot_SetNull(self.get_ref()) }
+    }
 
-    pub fn put_bool(self, value: bool)    { unsafe { FLSlot_SetBool(self._ref, value) } }
+    pub fn put_bool(self, value: bool) {
+        unsafe { FLSlot_SetBool(self.get_ref(), value) }
+    }
 
     pub fn put_i64<INT: Into<i64>>(self, value: INT) {
-        unsafe { FLSlot_SetInt(self._ref, value.into()) }
+        unsafe { FLSlot_SetInt(self.get_ref(), value.into()) }
     }
 
     pub fn put_f64<F: Into<f64>>(self, value: F) {
-        unsafe { FLSlot_SetDouble(self._ref, value.into()) }
+        unsafe { FLSlot_SetDouble(self.get_ref(), value.into()) }
     }
 
     pub fn put_string<STR: AsRef<str>>(self, value: STR) {
-        unsafe { FLSlot_SetString(self._ref, as_slice(value.as_ref())) }
+        unsafe { FLSlot_SetString(self.get_ref(), from_str(value.as_ref()).get_ref()) }
     }
 
     pub fn put_data<DATA: AsRef<[u8]>>(self, value: DATA) {
-        unsafe { FLSlot_SetString(self._ref, bytes_as_slice(value.as_ref())) }
+        unsafe { FLSlot_SetString(self.get_ref(), from_bytes(value.as_ref()).get_ref()) }
     }
 
-    pub fn put_value<VALUE: FleeceReference>(self, value: &VALUE)  {
-        unsafe { FLSlot_SetValue(self._ref, value._fleece_ref()) }
+    pub fn put_value<VALUE: FleeceReference>(self, value: &VALUE) {
+        unsafe { FLSlot_SetValue(self.get_ref(), value._fleece_ref()) }
+    }
+
+    pub fn put_encrypt(self, value: &encryptable::Encryptable) {
+        unsafe { FLSlot_SetEncryptableValue(self.get_ref(), value.get_ref()) }
     }
 }
