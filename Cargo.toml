@@ -1,6 +1,7 @@
 [package]
 name = "couchbase_lite"
-version = "0.2.1"
+version = "3.0.17-0"
+# The first three numbers correspond to the Couchbase Lite C release, the fourth number corresponds to the Doctolib release
 
 [dependencies]
 enum_primitive = "*"

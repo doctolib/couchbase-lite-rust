@@ -1,18 +1,14 @@
-# EXPERIMENTAL Rust Bindings For Couchbase Lite
+# Rust Bindings For Couchbase Lite
 
-This is a Rust API binding of [Couchbase Lite][CBL], an embedded NoSQL document database engine with sync.
+This is a Rust API of [Couchbase Lite][CBL], an embedded NoSQL document database engine with sync.
 
 ## Disclaimer
 
-> This library is **NOT SUPPORTED BY COUCHBASE**. Even if you are a Couchbase customer, our otherwise awesome support team cannot help you with using this library.
-
-As of September 2021, this library is still incomplete and has been tested only partially and informally, mostly on one platform (macOS). Also the author is a novice Rustacean and may not be doing things the Rust Way.
-
-That said, we would like to maintain and improve this library as time permits. We welcome bug reports, fixes and improvements!
+This library is **NOT SUPPORTED BY COUCHBASE**, it was forked from Couchbase Labs' repo [couchbase-lite-rust][CBL_RUST] and finalized.
+It is currently used and maintained by Doctolib.
+The supported platforms are Windows, macOS, Linux, Android and iOS.
 
 ## Building
-
-**_"Some assembly required..."_**
 
 ### 1. Install LLVM/Clang
 
@@ -95,6 +91,7 @@ compatible bindings. For those APIs you can check out the document "[Using Fleec
 [RUST]: https://www.rust-lang.org
 [CBL]: https://www.couchbase.com/products/lite
 [CBL_C]: https://github.com/couchbase/couchbase-lite-C
+[CBL_RUST]: https://github.com/couchbaselabs/couchbase-lite-rust
 [CBLDOCS]: https://docs.couchbase.com/couchbase-lite/current/introduction.html
 [FLEECE]: https://github.com/couchbaselabs/fleece/wiki/Using-Fleece
 [BINDGEN]: https://rust-lang.github.io/rust-bindgen/
