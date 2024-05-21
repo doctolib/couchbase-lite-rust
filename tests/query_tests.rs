@@ -112,6 +112,8 @@ fn full_index() {
         assert!(index.is_none());
 
         // Check index deletion
+        assert_eq!(db.get_index_names().count(), 1);
+
         db.delete_index("idx").unwrap();
         assert_eq!(db.get_index_names().count(), 1);
 
