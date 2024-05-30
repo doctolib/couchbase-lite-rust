@@ -1,5 +1,5 @@
 //
-//  CouchbaseLite.h
+//  CouchbaseLite.hh
 //
 // Copyright (c) 2018 Couchbase, Inc All rights reserved.
 //
@@ -16,16 +16,13 @@
 // limitations under the License.
 //
 
+// VOLATILE API: Couchbase Lite C++ API is not finalized, and may change in
+// future releases.
+
 #pragma once
-#include "CBLBase.h"
-#include "CBLBlob.h"
-#include "CBLCollection.h"
-#include "CBLDatabase.h"
-#include "CBLDefaults.h"
-#include "CBLDocument.h"
-#include "CBLEncryptable.h"
-#include "CBLLog.h"
-#include "CBLPlatform.h"
-#include "CBLQuery.h"
-#include "CBLReplicator.h"
-#include "CBLScope.h"
+#include "Blob.hh"
+#include "Collection.hh"
+#include "Database.hh"
+#include "Document.hh"
+#include "Query.hh"
+#include "Replicator.hh"
