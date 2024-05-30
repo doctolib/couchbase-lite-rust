@@ -1,5 +1,5 @@
 //
-// Base.h
+// CompilerSupport.h
 //
 // Copyright 2018-Present Couchbase, Inc.
 //
@@ -11,8 +11,8 @@
 //
 
 #pragma once
-#ifndef FLEECE_BASE_H
-#define FLEECE_BASE_H
+#ifndef _FLEECE_COMPILER_SUPPORT_H
+#define _FLEECE_COMPILER_SUPPORT_H
 
 // The __has_xxx() macros are only(?) implemented by Clang. (Except GCC has __has_attribute...)
 // Define them to return 0 on other compilers.
@@ -57,11 +57,32 @@
 #endif
 
 
+// Nullability annotations, for function parameters and struct fields.
+// In between FL_ASSUME_NONNULL_BEGIN and FL_ASSUME_NONNULL_END, all pointer declarations implicitly
+// disallow NULL values, unless annotated with FL_NULLABLE (which must come after the `*`.)
+// (FL_NONNULL is occasionally necessary when there are multiple levels of pointers.)
+// NOTE: Only supported in Clang, so far.
+#if __has_feature(nullability)
+#  define FL_ASSUME_NONNULL_BEGIN _Pragma("clang assume_nonnull begin")
+#  define FL_ASSUME_NONNULL_END _Pragma("clang assume_nonnull end")
+#  define FL_NULLABLE _Nullable
+#  define FL_NONNULL _Nonnull
+#  define FL_RETURNS_NONNULL __attribute__((returns_nonnull))
+#else
+#  define FL_ASSUME_NONNULL_BEGIN
+#  define FL_ASSUME_NONNULL_END
+#  define FL_NULLABLE
+#  define FL_NONNULL
+#  define FL_RETURNS_NONNULL
+#endif
+
+
 // Declares that a parameter must not be NULL. The compiler can sometimes detect violations
 // of this at compile time, if the parameter value is a literal.
 // The Clang Undefined-Behavior Sanitizer will detect all violations at runtime.
 // GCC also has an attribute with this name, but it's incompatible: it can't be applied to a
 // parameter, it has to come after the function and list parameters by number. Oh well.
+// TODO: Replace this with the better nullability annotations above.
 #ifdef __clang__
     #define NONNULL                     __attribute__((nonnull))
 #else
@@ -204,7 +225,28 @@
     #define WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_APP) 0
 #endif
 
+// On Windows, FLEECE_PUBLIC marks symbols as being exported from the shared library.
+// However, this is not the whole list of things that are exported.  The API methods
+// are exported using a definition list, but it is not possible to correctly include
+// initialized global variables, so those need to be marked (both in the header and
+// implementation) with FLEECE_PUBLIC.  See kFLNullValue below and in Fleece.cc
+// for an example.
+#if defined(_MSC_VER)
+#ifdef FLEECE_EXPORTS
+#define FLEECE_PUBLIC __declspec(dllexport)
+#else
+#define FLEECE_PUBLIC __declspec(dllimport)
+#endif
+#else
+#define FLEECE_PUBLIC __attribute__((visibility("default")))
+#endif
 
-#else // FLEECE_BASE_H
+#ifdef __cplusplus
+    #define FLAPI noexcept
+#else
+    #define FLAPI
+#endif
+
+#else // _FLEECE_COMPILER_SUPPORT_H
 #warn "Compiler is not honoring #pragma once"
 #endif
