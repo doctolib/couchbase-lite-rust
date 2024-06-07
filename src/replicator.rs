@@ -841,7 +841,7 @@ unsafe extern "C" fn c_replicator_change_listener(
 }
 
 /** A callback that notifies you when documents are replicated. */
-pub type ReplicatedDocumentListener = Box<dyn Fn(Direction, Vec<ReplicatedDocument>)>;
+pub type ReplicatedDocumentListener = Box<dyn Fn(Direction, Vec<ReplicatedDocument>) + Send + Sync>;
 unsafe extern "C" fn c_replicator_document_change_listener(
     context: *mut ::std::os::raw::c_void,
     _replicator: *mut CBLReplicator,
