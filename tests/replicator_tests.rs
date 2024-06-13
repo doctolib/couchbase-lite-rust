@@ -15,11 +15,13 @@
 // limitations under the License.
 //
 
+extern crate rand;
 extern crate couchbase_lite;
 
 use self::couchbase_lite::*;
 use encryptable::Encryptable;
 use std::{time::Duration, thread};
+use rand::prelude::*;
 
 pub mod utils;
 
@@ -954,7 +956,9 @@ fn reproduce_keys_mixup() {
         };
 
         let mut props = doc.mutable_properties();
-        for i in 0..30 {
+        let mut rng = thread_rng();
+        let random_document_size = rng.gen_range(5..=200);
+        for i in 0..random_document_size {
             props
                 .at(&format!("{}{}", prefix, i))
                 .put_string(format!("val_{}{}_{}", prefix, i, version));
