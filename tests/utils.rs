@@ -31,7 +31,7 @@ fn logger(domain: logging::Domain, level: logging::Level, message: &str) {
 
 pub fn init_logging() {
     logging::set_callback(Some(logger));
-    logging::set_callback_level(logging::Level::Verbose);
+    logging::set_callback_level(logging::Level::Error);
     logging::set_console_level(logging::Level::None);
 }
 
