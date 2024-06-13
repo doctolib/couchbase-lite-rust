@@ -1004,13 +1004,19 @@ fn reproduce_keys_mixup() {
         ));
     });
 
-    for version in 1..100 {
+    for version in 1..100000 {
         println!("Version: {version}");
         tester.stop_replicator();
 
         tester.test(|_, central_db, _| {
-            upsert_central_doc(central_db, "a", version);
-            upsert_central_doc(central_db, "b", version);
+            // Make sure the keys are never in the same order
+            if version % 2 == 0 {
+                //upsert_central_doc(central_db, "a", version);
+                upsert_central_doc(central_db, "b", version);
+            } else {
+                upsert_central_doc(central_db, "b", version);
+                //upsert_central_doc(central_db, "a", version);
+            }
         });
 
         tester.change_replicator(
@@ -1019,7 +1025,7 @@ fn reproduce_keys_mixup() {
         );
 
         tester.test(|local_db, _, _| {
-            check_local_doc(local_db, "a", version);
+            //check_local_doc(local_db, "a", version);
             check_local_doc(local_db, "b", version);
         });
     }

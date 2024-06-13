@@ -31,7 +31,7 @@ fn logger(domain: logging::Domain, level: logging::Level, message: &str) {
 
 pub fn init_logging() {
     logging::set_callback(Some(logger));
-    logging::set_callback_level(logging::Level::Error);
+    logging::set_callback_level(logging::Level::Verbose);
     logging::set_console_level(logging::Level::None);
 }
 
@@ -193,6 +193,19 @@ impl ReplicationTwoDbsTester {
         if self.replicator_continuous {
             assert!(self.replicator.stop(None));
         }
+        let old_local_database = self.local_database.clone();
+
+        let tmp_dir_path = self._tmp_dir.path();
+        let local_database_configuration = DatabaseConfiguration {
+            directory: tmp_dir_path,
+            encryption_key: None,
+        };
+        let local_database =
+            Database::open("local", Some(local_database_configuration)).expect("open db local");
+        assert!(Database::exists("local", tmp_dir_path));
+        self.local_database = local_database;
+
+        old_local_database.close().unwrap();
     }
 
     fn new_replicator(
