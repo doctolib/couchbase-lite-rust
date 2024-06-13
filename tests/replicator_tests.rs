@@ -939,60 +939,57 @@ mod unsafe_test {
     }
 }
 
-#[test]
-fn reproduce_keys_mixup() {
-    println!("couchbase-lite-C version: {}", couchbase_lite_c_version());
+fn upsert_central_doc(db: &mut Database, prefix: &str, version: i64) {
+    let mut doc = if let Ok(doc) = db.get_document(prefix) {
+        doc
+    } else {
+        Document::new_with_id(prefix)
+    };
 
+    let mut props = doc.mutable_properties();
+    let mut rng = thread_rng();
+    let random_document_size = rng.gen_range(5..=200);
+    for i in 0..random_document_size {
+        props
+            .at(&format!("{}{}", prefix, i))
+            .put_string(format!("val_{}{}_{}", prefix, i, version));
+    }
+
+    db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
+        .expect("save");
+}
+
+fn check_local_doc(db: &mut Database, prefix: &str, version: i64) {
+    let mut doc = db.get_document(prefix).unwrap();
+
+    let mut lastest_version_found = false;
+    while !lastest_version_found {
+        let props = doc.properties();
+        for prop in props {
+            assert!(prop.0.starts_with(prefix));
+        }
+
+        thread::sleep(Duration::from_millis(1));
+        doc = db.get_document(prefix).unwrap();
+        if doc
+            .properties()
+            .get(&format!("{}{}", prefix, 0))
+            .as_string()
+            .unwrap()
+            .ends_with(&format!("_{version}"))
+        {
+            lastest_version_found = true;
+        }
+    }
+
+    // We found the latest version of the doc & each key is correct
+}
+
+fn run_reproduce_keys_mixup() {
     let mut tester = utils::ReplicationTwoDbsTester::new(
         utils::ReplicationTestConfiguration::default(),
         Box::new(ReplicationConfigurationContext::default()),
     );
-
-    fn upsert_central_doc(db: &mut Database, prefix: &str, version: i64) {
-        let mut doc = if let Ok(doc) = db.get_document(prefix) {
-            doc
-        } else {
-            Document::new_with_id(prefix)
-        };
-
-        let mut props = doc.mutable_properties();
-        let mut rng = thread_rng();
-        let random_document_size = rng.gen_range(5..=200);
-        for i in 0..random_document_size {
-            props
-                .at(&format!("{}{}", prefix, i))
-                .put_string(format!("val_{}{}_{}", prefix, i, version));
-        }
-
-        db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
-            .expect("save");
-    }
-
-    fn check_local_doc(db: &mut Database, prefix: &str, version: i64) {
-        let mut doc = db.get_document(prefix).unwrap();
-
-        let mut lastest_version_found = false;
-        while !lastest_version_found {
-            let props = doc.properties();
-            for prop in props {
-                assert!(prop.0.starts_with(prefix));
-            }
-
-            thread::sleep(Duration::from_millis(1));
-            doc = db.get_document(prefix).unwrap();
-            if doc
-                .properties()
-                .get(&format!("{}{}", prefix, 0))
-                .as_string()
-                .unwrap()
-                .ends_with(&format!("_{version}"))
-            {
-                lastest_version_found = true;
-            }
-        }
-
-        // We found the latest version of the doc & each key is correct
-    }
 
     tester.test(|local_db, central_db, _| {
         upsert_central_doc(central_db, "a", 0);
@@ -1032,5 +1029,19 @@ fn reproduce_keys_mixup() {
             check_local_doc(local_db, "a", version);
             check_local_doc(local_db, "b", version);
         });
+    }
+}
+
+#[test]
+fn reproduce_keys_mixup() {
+    println!("couchbase-lite-C version: {}", couchbase_lite_c_version());
+
+    let handler = thread::spawn(|| {
+        run_reproduce_keys_mixup();
+    });
+
+    if let Err(_) = handler.join() {
+        println!("ERROR DETECTED");
+        run_reproduce_keys_mixup();
     }
 }
