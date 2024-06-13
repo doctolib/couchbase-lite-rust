@@ -117,7 +117,7 @@ fn generate_replication_configuration(
 
 pub struct ReplicationTwoDbsTester {
     _tmp_dir: TempDir,
-    pub local_database: Database,
+    pub local_database: Option<Database>,
     central_database: Database,
     replicator: Replicator,
     replicator_continuous: bool,
@@ -167,7 +167,7 @@ impl ReplicationTwoDbsTester {
         // Return
         Self {
             _tmp_dir: tmp_dir,
-            local_database,
+            local_database: Some(local_database),
             central_database,
             replicator,
             replicator_continuous,
@@ -179,7 +179,7 @@ impl ReplicationTwoDbsTester {
         F: Fn(&mut Database, &mut Database, &mut Replicator),
     {
         f(
-            &mut self.local_database,
+            &mut self.local_database.as_mut().unwrap(),
             &mut self.central_database,
             &mut self.replicator,
         );
@@ -193,7 +193,9 @@ impl ReplicationTwoDbsTester {
         if self.replicator_continuous {
             assert!(self.replicator.stop(None));
         }
-        let old_local_database = self.local_database.clone();
+
+        let old_local_database = self.local_database.take();
+        old_local_database.unwrap().close().unwrap();
 
         let tmp_dir_path = self._tmp_dir.path();
         let local_database_configuration = DatabaseConfiguration {
@@ -203,9 +205,7 @@ impl ReplicationTwoDbsTester {
         let local_database =
             Database::open("local", Some(local_database_configuration)).expect("open db local");
         assert!(Database::exists("local", tmp_dir_path));
-        self.local_database = local_database;
-
-        old_local_database.close().unwrap();
+        self.local_database = Some(local_database);
     }
 
     fn new_replicator(
@@ -216,7 +216,7 @@ impl ReplicationTwoDbsTester {
         let replicator_continuous = new_configuration.continuous;
 
         let new_configuration = generate_replication_configuration(
-            &self.local_database,
+            &self.local_database.as_mut().unwrap(),
             &self.central_database,
             new_configuration,
         );
@@ -243,7 +243,7 @@ impl Drop for ReplicationTwoDbsTester {
     fn drop(&mut self) {
         self.stop_replicator();
 
-        self.local_database.clone().delete().unwrap();
+        self.local_database.clone().unwrap().delete().unwrap();
         self.central_database.clone().delete().unwrap();
     }
 }

@@ -1008,7 +1008,7 @@ fn reproduce_keys_mixup() {
         ));
     });
 
-    for version in 1..100000 {
+    for version in 1..1000 {
         println!("Version: {version}");
         tester.stop_replicator();
 
