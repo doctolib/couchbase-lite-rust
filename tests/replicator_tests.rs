@@ -1011,11 +1011,11 @@ fn reproduce_keys_mixup() {
         tester.test(|_, central_db, _| {
             // Make sure the keys are never in the same order
             if version % 2 == 0 {
-                //upsert_central_doc(central_db, "a", version);
+                upsert_central_doc(central_db, "a", version);
                 upsert_central_doc(central_db, "b", version);
             } else {
                 upsert_central_doc(central_db, "b", version);
-                //upsert_central_doc(central_db, "a", version);
+                upsert_central_doc(central_db, "a", version);
             }
         });
 
@@ -1025,7 +1025,7 @@ fn reproduce_keys_mixup() {
         );
 
         tester.test(|local_db, _, _| {
-            //check_local_doc(local_db, "a", version);
+            check_local_doc(local_db, "a", version);
             check_local_doc(local_db, "b", version);
         });
     }
