@@ -966,7 +966,7 @@ fn check_local_doc(db: &mut Database, prefix: &str, version: i64) {
     let mut lastest_version_found = false;
     let check_start_time = time::Instant::now();
     while !lastest_version_found {
-        if check_start_time.elapsed() < time::Duration::from_secs(5) {
+        if check_start_time.elapsed() > time::Duration::from_secs(5) {
             warn!("Timeout waiting for the {version:?} version of the document {doc:#?}");
             break;
         }
