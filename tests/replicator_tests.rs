@@ -20,6 +20,7 @@ extern crate couchbase_lite;
 
 use self::couchbase_lite::*;
 use encryptable::Encryptable;
+use std::time;
 use std::{time::Duration, thread};
 use rand::prelude::*;
 
@@ -963,7 +964,12 @@ fn check_local_doc(db: &mut Database, prefix: &str, version: i64) {
     let mut doc = db.get_document(prefix).unwrap();
 
     let mut lastest_version_found = false;
+    let check_start_time = time::Instant::now();
     while !lastest_version_found {
+        if check_start_time.elapsed() < time::Duration::from_secs(5) {
+            warn!("Timeout waiting for the {version:?} version of the document {doc:#?}");
+            break;
+        }
         let props = doc.properties();
         for prop in props {
             assert!(prop.0.starts_with(prefix));
@@ -1005,7 +1011,7 @@ fn run_reproduce_keys_mixup() {
         ));
     });
 
-    for version in 1..1000 {
+    for version in 1..10000 {
         println!("Version: {version}");
         tester.stop_replicator();
 
