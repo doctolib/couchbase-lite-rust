@@ -53,7 +53,7 @@ mod c_api;
 
 use self::c_api::{
     CBLListenerToken, CBLRefCounted, CBL_DumpInstances, CBL_InstanceCount, CBL_Release, CBL_Retain,
-    CBLListener_Remove,
+    CBLListener_Remove, CBLITE_VERSION,
 };
 #[cfg(target_os = "android")]
 use self::c_api::{CBLError, CBLInitContext, CBL_Init};
@@ -122,6 +122,10 @@ impl Drop for ListenerToken {
 }
 
 //////// MISC. API FUNCTIONS
+
+pub fn couchbase_lite_c_version() -> String {
+    String::from_utf8_lossy(CBLITE_VERSION).to_string()
+}
 
 /** Returns the total number of Couchbase Lite objects. Useful for leak checking. */
 pub fn instance_count() -> usize {
