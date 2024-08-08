@@ -54,7 +54,6 @@ use self::c_api::{
 };
 #[cfg(target_os = "android")]
 use self::c_api::{CBLError, CBLInitContext, CBL_Init};
-#[cfg(target_os = "android")]
 use std::ffi::CStr;
 
 //////// RE-EXPORT:
@@ -121,7 +120,11 @@ impl Drop for ListenerToken {
 //////// MISC. API FUNCTIONS
 
 pub fn couchbase_lite_c_version() -> String {
-    String::from_utf8_lossy(CBLITE_VERSION).to_string()
+    CStr::from_bytes_with_nul(CBLITE_VERSION)
+        .unwrap_or_default()
+        .to_str()
+        .unwrap_or_default()
+        .to_string()
 }
 
 /** Returns the total number of Couchbase Lite objects. Useful for leak checking. */
