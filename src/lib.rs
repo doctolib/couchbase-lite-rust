@@ -55,8 +55,6 @@ use self::c_api::{
 #[cfg(target_os = "android")]
 use self::c_api::{CBLError, CBLInitContext, CBL_Init};
 use std::ffi::CStr;
-#[cfg(target_os = "android")]
-use std::ffi::CStr;
 
 //////// RE-EXPORT:
 
