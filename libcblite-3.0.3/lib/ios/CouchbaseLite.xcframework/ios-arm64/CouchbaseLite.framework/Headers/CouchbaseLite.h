@@ -19,10 +19,13 @@
 #pragma once
 #include <CouchbaseLite/CBLBase.h>
 #include <CouchbaseLite/CBLBlob.h>
+#include <CouchbaseLite/CBLCollection.h>
 #include <CouchbaseLite/CBLDatabase.h>
+#include <CouchbaseLite/CBLDefaults.h>
 #include <CouchbaseLite/CBLDocument.h>
 #include <CouchbaseLite/CBLEncryptable.h>
 #include <CouchbaseLite/CBLLog.h>
 #include <CouchbaseLite/CBLPlatform.h>
 #include <CouchbaseLite/CBLQuery.h>
 #include <CouchbaseLite/CBLReplicator.h>
+#include <CouchbaseLite/CBLScope.h>

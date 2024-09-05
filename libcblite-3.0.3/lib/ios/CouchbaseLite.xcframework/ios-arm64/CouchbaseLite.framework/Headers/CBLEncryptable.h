@@ -18,7 +18,6 @@
 
 #pragma once
 #include <CouchbaseLite/CBLBase.h>
-#include <CouchbaseLite/Fleece.h>
 
 #ifdef COUCHBASE_ENTERPRISE
 
