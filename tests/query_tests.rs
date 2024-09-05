@@ -212,3 +212,61 @@ fn parameters() {
         assert_eq!(query.execute().unwrap().count(), 1);
     });
 }
+
+#[test]
+fn guillaume() {
+    utils::with_db(|db| {
+        assert!(db
+            .create_index(
+                "good_index",
+                &ValueIndexConfiguration::new(
+                    QueryLanguage::JSON,
+                    r#"[[".type"],[".session_id"]]"#
+                ),
+            )
+            .unwrap());
+
+        assert!(db
+            .create_index(
+                "bad_index",
+                &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".type"]]"#),
+            )
+            .unwrap());
+
+        let mut doc = Document::new_with_id("id1");
+        let mut props = doc.mutable_properties();
+        props.at("type").put_string("HardcodedType");
+        props.at("session_id").put_string("session1");
+        db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
+            .expect("save");
+
+        let query = Query::new(
+            db,
+            QueryLanguage::N1QL,
+            "SELECT _.* FROM _ \
+                WHERE _.type = 'HardcodedType' \
+                AND ARRAY_CONTAINS($sessionIds, _.session_id)",
+        )
+        .expect("create query");
+
+        let mut params = MutableDict::new();
+        let mut session_ids = MutableArray::new();
+        session_ids.append().put_string("session1");
+        session_ids.append().put_string("session2");
+        params.at("sessionIds").put_value(&session_ids);
+        query.set_parameters(&params);
+
+        let params = query.parameters();
+        assert_eq!(
+            params.get("sessionIds").as_array().get(0).as_string(),
+            Some("session1")
+        );
+        assert_eq!(
+            params.get("sessionIds").as_array().get(1).as_string(),
+            Some("session2")
+        );
+
+        println!("Explain: {:?}", query.explain());
+        assert_eq!(query.execute().unwrap().count(), 1);
+    });
+}
