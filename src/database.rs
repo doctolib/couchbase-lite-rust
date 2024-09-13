@@ -482,6 +482,19 @@ impl Database {
         })
     }
 
+    pub fn default_collection_or_error(&self) -> Result<Collection> {
+        let mut error = CBLError::default();
+        let collection = unsafe { CBLDatabase_DefaultCollection(self.get_ref(), &mut error) };
+
+        check_error(&error)?;
+
+        if collection.is_null() {
+            Err(Error::cbl_error(CouchbaseLiteError::NotFound))
+        } else {
+            Ok(Collection::retain(collection))
+        }
+    }
+
     //////// NOTIFICATIONS:
 
     /** Registers a database change listener function. It will be called after one or more
