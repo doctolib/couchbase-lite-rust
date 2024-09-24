@@ -57,7 +57,7 @@ function download() {
     fi
 }
 
-download ubuntu20.04-x86_64.tar.gz
+download linux-x86_64.tar.gz
 download windows-x86_64.zip
 download macos.zip
 download android.zip
