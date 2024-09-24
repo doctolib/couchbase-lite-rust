@@ -29,8 +29,8 @@ fn create_delete_scopes_collections() {
         assert!(db.scope(DEFAULT_NAME.to_string()).unwrap().is_some());
         assert!(db.scope(unknown.clone()).unwrap().is_none());
         assert_eq!(
-            db.default_scope().unwrap(),
-            db.scope(DEFAULT_NAME.to_string()).unwrap().unwrap()
+            db.default_scope().unwrap().name(),
+            db.scope(DEFAULT_NAME.to_string()).unwrap().unwrap().name()
         );
 
         // Get collection
@@ -46,10 +46,11 @@ fn create_delete_scopes_collections() {
             .collection(DEFAULT_NAME.to_string(), unknown.clone())
             .is_err()); // Invalid scope => Err
         assert_eq!(
-            db.default_collection().unwrap().unwrap(),
+            db.default_collection().unwrap().unwrap().name(),
             db.collection(DEFAULT_NAME.to_string(), DEFAULT_NAME.to_string())
                 .unwrap()
                 .unwrap()
+                .name()
         );
 
         // Add collection in default scope
@@ -61,13 +62,15 @@ fn create_delete_scopes_collections() {
             assert_eq!(
                 db.collection(new_collection_1.clone(), DEFAULT_NAME.to_string())
                     .unwrap()
-                    .unwrap(),
-                c1_default_scope
+                    .unwrap()
+                    .name(),
+                c1_default_scope.name()
             );
             assert_eq!(
                 db.create_collection(new_collection_1.clone(), DEFAULT_NAME.to_string())
-                    .unwrap(),
-                c1_default_scope
+                    .unwrap()
+                    .name(),
+                c1_default_scope.name()
             );
 
             assert_eq!(
@@ -85,13 +88,15 @@ fn create_delete_scopes_collections() {
             assert_eq!(
                 db.collection(new_collection_2.clone(), new_scope.clone())
                     .unwrap()
-                    .unwrap(),
-                c2_new_scope
+                    .unwrap()
+                    .name(),
+                c2_new_scope.name()
             );
             assert_eq!(
                 db.create_collection(new_collection_2.clone(), new_scope.clone())
-                    .unwrap(),
-                c2_new_scope
+                    .unwrap()
+                    .name(),
+                c2_new_scope.name()
             );
 
             assert_eq!(
@@ -158,8 +163,9 @@ fn collections_accessors() {
         assert_eq!(
             db.collection(new_collection_1.clone(), DEFAULT_NAME.to_string())
                 .unwrap()
-                .unwrap(),
-            c1_default_scope
+                .unwrap()
+                .name(),
+            c1_default_scope.name()
         );
 
         let c2_new_scope = db
@@ -168,8 +174,9 @@ fn collections_accessors() {
         assert_eq!(
             db.collection(new_collection_2.clone(), new_scope.clone())
                 .unwrap()
-                .unwrap(),
-            c2_new_scope
+                .unwrap()
+                .name(),
+            c2_new_scope.name()
         );
 
         let c1_new_scope = db
@@ -178,17 +185,18 @@ fn collections_accessors() {
         assert_eq!(
             db.collection(new_collection_1.clone(), new_scope.clone())
                 .unwrap()
-                .unwrap(),
-            c1_new_scope
+                .unwrap()
+                .name(),
+            c1_new_scope.name()
         );
 
         let default_scope = db.scope(DEFAULT_NAME.to_string()).unwrap().unwrap();
         let new_actual_scope = db.scope(new_scope.clone()).unwrap().unwrap();
 
         // Scope
-        assert_eq!(c1_default_scope.scope(), default_scope);
-        assert_eq!(c2_new_scope.scope(), new_actual_scope);
-        assert_eq!(c1_new_scope.scope(), new_actual_scope);
+        assert_eq!(c1_default_scope.scope().name(), default_scope.name());
+        assert_eq!(c2_new_scope.scope().name(), new_actual_scope.name());
+        assert_eq!(c1_new_scope.scope().name(), new_actual_scope.name());
 
         // Name
         assert_eq!(c1_default_scope.name(), new_collection_1.clone());
@@ -216,8 +224,9 @@ fn scope_accessors() {
         assert_eq!(
             db.collection(new_collection_1.clone(), DEFAULT_NAME.to_string())
                 .unwrap()
-                .unwrap(),
-            c1_default_scope
+                .unwrap()
+                .name(),
+            c1_default_scope.name()
         );
 
         let c2_new_scope = db
@@ -226,8 +235,9 @@ fn scope_accessors() {
         assert_eq!(
             db.collection(new_collection_2.clone(), new_scope.clone())
                 .unwrap()
-                .unwrap(),
-            c2_new_scope
+                .unwrap()
+                .name(),
+            c2_new_scope.name()
         );
 
         let c1_new_scope = db
@@ -236,8 +246,9 @@ fn scope_accessors() {
         assert_eq!(
             db.collection(new_collection_1.clone(), new_scope.clone())
                 .unwrap()
-                .unwrap(),
-            c1_new_scope
+                .unwrap()
+                .name(),
+            c1_new_scope.name()
         );
 
         let default_scope = db.scope(DEFAULT_NAME.to_string()).unwrap().unwrap();
@@ -266,22 +277,25 @@ fn scope_accessors() {
             default_scope
                 .collection(new_collection_1.clone())
                 .unwrap()
-                .unwrap(),
-            c1_default_scope
+                .unwrap()
+                .name(),
+            c1_default_scope.name()
         );
         assert_eq!(
             new_actual_scope
                 .collection(new_collection_2.clone())
                 .unwrap()
-                .unwrap(),
-            c2_new_scope
+                .unwrap()
+                .name(),
+            c2_new_scope.name()
         );
         assert_eq!(
             new_actual_scope
                 .collection(new_collection_1.clone())
                 .unwrap()
-                .unwrap(),
-            c1_new_scope
+                .unwrap()
+                .name(),
+            c1_new_scope.name()
         );
     });
 }
