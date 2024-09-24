@@ -6,5 +6,5 @@ use couchbase_lite::*;
 
 #[test]
 fn couchbase_lite_c_version_test() {
-    assert_eq!(couchbase_lite_c_version(), "3.1.7".to_string());
+    assert_eq!(couchbase_lite_c_version(), "3.2.0".to_string());
 }
