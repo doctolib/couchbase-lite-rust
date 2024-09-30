@@ -172,3 +172,43 @@ fn partial_index() {
         assert!(index.is_none());
     });
 }
+
+#[test]
+fn parameters() {
+    utils::with_db(|db| {
+        let mut doc = Document::new_with_id("id1");
+        let mut props = doc.mutable_properties();
+        props.at("bool").put_bool(true);
+        props.at("f64").put_f64(3.1);
+        props.at("i64").put_i64(3);
+        props.at("string").put_string("allo");
+        db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
+            .expect("save");
+
+        let query = Query::new(
+            db,
+            QueryLanguage::N1QL,
+            "SELECT _.* FROM _ \
+                WHERE _.bool=$bool \
+                AND _.f64=$f64 \
+                AND _.i64=$i64 \
+                AND _.string=$string",
+        )
+        .expect("create query");
+
+        let mut params = MutableDict::new();
+        params.at("bool").put_bool(true);
+        params.at("f64").put_f64(3.1);
+        params.at("i64").put_i64(3);
+        params.at("string").put_string("allo");
+        query.set_parameters(&params);
+
+        let params = query.parameters();
+        assert_eq!(params.get("bool").as_bool(), Some(true));
+        assert_eq!(params.get("f64").as_f64(), Some(3.1));
+        assert_eq!(params.get("i64").as_i64(), Some(3));
+        assert_eq!(params.get("string").as_string(), Some("allo"));
+
+        assert_eq!(query.execute().unwrap().count(), 1);
+    });
+}
