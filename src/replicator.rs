@@ -641,20 +641,11 @@ pub extern "C" fn c_collection_property_decryptor(
 
 #[derive(Default)]
 pub struct ReplicationConfigurationContext {
-    #[deprecated(note = "please use `collection.push_filter` on default collection instead")]
-    pub push_filter: Option<ReplicationFilter>,
-    #[deprecated(note = "please use `collection.pull_filter` on default collection instead")]
-    pub pull_filter: Option<ReplicationFilter>,
-    #[deprecated(note = "please use `collection.conflict_resolver` on default collection instead")]
-    pub conflict_resolver: Option<ConflictResolver>,
-    #[deprecated(
-        note = "please use `collection_property_encryptor` on default collection instead"
-    )]
-    pub default_collection_property_encryptor: Option<DefaultCollectionPropertyEncryptor>,
-    #[deprecated(
-        note = "please use `collection_property_decryptor` on default collection instead"
-    )]
-    pub default_collection_property_decryptor: Option<DefaultCollectionPropertyDecryptor>,
+    pub push_filter: Option<ReplicationFilter>, // TODO: deprecated
+    pub pull_filter: Option<ReplicationFilter>, // TODO: deprecated
+    pub conflict_resolver: Option<ConflictResolver>, // TODO: deprecated
+    pub default_collection_property_encryptor: Option<DefaultCollectionPropertyEncryptor>, // TODO: deprecated
+    pub default_collection_property_decryptor: Option<DefaultCollectionPropertyDecryptor>, // TODO: deprecated
     pub collection_property_encryptor: Option<CollectionPropertyEncryptor>,
     pub collection_property_decryptor: Option<CollectionPropertyDecryptor>,
 }
@@ -692,11 +683,11 @@ impl ReplicationCollection {
 
 /** The configuration of a replicator. */
 pub struct ReplicatorConfiguration {
-    #[deprecated(note = "use collections instead")]
+    // TODO: deprecated
     pub database: Option<Database>, // The database to replicate. When setting the database, ONLY the default collection will be used for replication.
-    pub endpoint: Endpoint, // The address of the other database to replicate with
+    pub endpoint: Endpoint,         // The address of the other database to replicate with
     pub replicator_type: ReplicatorType, // Push, pull or both
-    pub continuous: bool,   // Continuous replication?
+    pub continuous: bool,           // Continuous replication?
     //-- Auto Purge:
     /**
     If auto purge is active, then the library will automatically purge any documents that the replicating
@@ -721,9 +712,9 @@ pub struct ReplicatorConfiguration {
     pub pinned_server_certificate: Option<Vec<u8>>, // An X.509 cert to "pin" TLS connections to (PEM or DER)
     pub trusted_root_certificates: Option<Vec<u8>>, // Set of anchor certs (PEM format)
     //-- Filtering:
-    #[deprecated(note = "please use `collection.channels` on default collection instead")]
+    // TODO: deprecated
     pub channels: MutableArray, // Optional set of channels to pull from
-    #[deprecated(note = "please use `collection.document_ids` on default collection instead")]
+    // TODO: deprecated
     pub document_ids: MutableArray, // Optional set of document IDs to replicate
     pub collections: Option<Vec<ReplicationCollection>>, // The collections to replicate with the target's endpoint (Required if the database is not set).
     //-- Advanced HTTP settings:
