@@ -8,6 +8,7 @@ enum_primitive = "*"
 tempdir = "*"
 lazy_static = "1.4.0"
 regex = "1.10.4"
+dirs = "^5"
 
 [dev-dependencies.cargo-husky]
 version = "1"

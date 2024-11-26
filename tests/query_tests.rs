@@ -212,3 +212,137 @@ fn parameters() {
         assert_eq!(query.execute().unwrap().count(), 1);
     });
 }
+
+#[test]
+fn array_contains() {
+    use std::path::PathBuf;
+    use std::time::Instant;
+
+    const DB_NAME: &str = "test_db";
+
+    let base_loc = dirs::data_local_dir()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    let dir = PathBuf::from(format!("{base_loc}/billeo"));
+
+    let cfg = DatabaseConfiguration {
+        directory: dir.as_path(),
+        encryption_key: None,
+    };
+
+    if let Ok(db) = Database::open(DB_NAME, Some(cfg.clone())) {
+        db.delete().unwrap();
+    }
+
+    let mut db = Database::open(DB_NAME, Some(cfg)).expect("open db");
+    assert!(Database::exists(DB_NAME, dir.as_path()));
+
+    // Add documents
+
+    //   - Add Model1
+
+    for i in 0..25000 {
+        let mut doc = Document::new_with_id(&format!("id_model1_{i}"));
+
+        let mut props = doc.mutable_properties();
+        props.at("type").put_string("Model1");
+        props.at("uselessField").put_i64(i);
+
+        let mut model2_ids = MutableArray::new();
+        model2_ids
+            .append()
+            .put_string(&format!("id_model2_{}", 4 * i));
+        model2_ids
+            .append()
+            .put_string(&format!("id_model2_{}", 4 * i + 1));
+        model2_ids
+            .append()
+            .put_string(&format!("id_model2_{}", 4 * i + 2));
+        model2_ids
+            .append()
+            .put_string(&format!("id_model2_{}", 4 * i + 3));
+        props.at("model2Ids").put_value(&model2_ids);
+
+        db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
+            .expect("save");
+    }
+
+    //   - Add Model2
+
+    for i in 0..100000 {
+        let mut doc = Document::new_with_id(&format!("id_model2_{i}"));
+
+        let mut props = doc.mutable_properties();
+        props.at("type").put_string("Model2");
+
+        db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
+            .expect("save");
+    }
+
+    // Run query
+
+    let query = Query::new(
+        &db,
+        QueryLanguage::N1QL,
+        "SELECT _.* FROM _ \
+            WHERE _.type='Model1' \
+            AND ARRAY_CONTAINS(_.model2Ids, $model2Id)",
+    )
+    .expect("create query");
+
+    fn run_query(use_case: &str, query: &Query) {
+        println!(
+            "Explain for use case [{}]: {}",
+            use_case,
+            query.explain().unwrap()
+        );
+
+        let start = Instant::now();
+
+        for i in 0..100 {
+            let mut params = MutableDict::new();
+            params
+                .at("model2Id")
+                .put_string(&format!("id_model2_{}", i * 100));
+            query.set_parameters(&params);
+
+            assert_eq!(query.execute().unwrap().count(), 1);
+        }
+
+        let stop = start.elapsed();
+
+        println!(
+            "Query average time for use case [{}]: {:?}",
+            use_case,
+            stop / 100
+        );
+    }
+
+    //   - No index
+
+    run_query("no index", &query);
+
+    //   - Good index
+
+    assert!(db
+        .create_index(
+            "good_index",
+            &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".type"], [".model2Ids"]]"#),
+        )
+        .unwrap());
+
+    run_query("good_index", &query);
+
+    //   - Bad index
+
+    assert!(db
+        .create_index(
+            "bad_index",
+            &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".type"], [".uselessField"]]"#),
+        )
+        .unwrap());
+
+    run_query("bad_index", &query);
+}
