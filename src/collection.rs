@@ -2,9 +2,10 @@ use crate::{
     CblRef, Listener, ListenerToken, release, retain,
     c_api::{
         CBLCollection, CBLCollectionChange, CBLCollection_AddChangeListener, CBLCollection_Scope,
-        CBLCollection_Name, CBLCollection_Count,
+        CBLCollection_Name, CBLCollection_Count, CBLCollection_FullName, CBLCollection_Database,
     },
     scope::Scope,
+    Database,
 };
 
 pub static DEFAULT_NAME: &str = "_default";
@@ -33,6 +34,20 @@ impl Collection {
                 .to_string()
                 .unwrap_or_default()
         }
+    }
+
+    /** Returns the collection full name */
+    pub fn full_name(&self) -> String {
+        unsafe {
+            CBLCollection_FullName(self.get_ref())
+                .to_string()
+                .unwrap_or_default()
+        }
+    }
+
+    /** Returns the collection's database */
+    pub fn database(&self) -> Database {
+        unsafe { Database::wrap(CBLCollection_Database(self.get_ref())) }
     }
 
     /** Returns the number of documents in the collection. */
