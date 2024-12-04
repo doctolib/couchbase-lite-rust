@@ -1,7 +1,7 @@
 extern crate couchbase_lite;
 extern crate regex;
 
-use couchbase_lite::index::ValueIndexConfiguration;
+use couchbase_lite::index::{ValueIndexConfiguration, ArrayIndexConfiguration};
 use regex::Regex;
 
 use self::couchbase_lite::*;
@@ -66,6 +66,90 @@ fn query() {
 }
 
 #[test]
+fn parameters() {
+    utils::with_db(|db| {
+        let mut doc = Document::new_with_id("id1");
+        let mut props = doc.mutable_properties();
+        props.at("bool").put_bool(true);
+        props.at("f64").put_f64(3.1);
+        props.at("i64").put_i64(3);
+        props.at("string").put_string("allo");
+        db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
+            .expect("save");
+
+        let query = Query::new(
+            db,
+            QueryLanguage::N1QL,
+            "SELECT _.* FROM _ \
+                WHERE _.bool=$bool \
+                AND _.f64=$f64 \
+                AND _.i64=$i64 \
+                AND _.string=$string",
+        )
+        .expect("create query");
+
+        let mut params = MutableDict::new();
+        params.at("bool").put_bool(true);
+        params.at("f64").put_f64(3.1);
+        params.at("i64").put_i64(3);
+        params.at("string").put_string("allo");
+        query.set_parameters(&params);
+
+        let params = query.parameters();
+        assert_eq!(params.get("bool").as_bool(), Some(true));
+        assert_eq!(params.get("f64").as_f64(), Some(3.1));
+        assert_eq!(params.get("i64").as_i64(), Some(3));
+        assert_eq!(params.get("string").as_string(), Some("allo"));
+
+        assert_eq!(query.execute().unwrap().count(), 1);
+    });
+}
+
+#[test]
+fn get_index() {
+    utils::with_db(|db| {
+        // Default collection
+        let default_collection = db.default_collection().unwrap().unwrap();
+        assert!(default_collection
+            .create_index(
+                "new_index1",
+                &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField"]]"#),
+            )
+            .unwrap());
+
+        let index1 = default_collection.get_index("new_index1").unwrap();
+        assert_eq!(index1.name(), "new_index1");
+        assert_eq!(
+            index1.collection().full_name(),
+            default_collection.full_name()
+        );
+
+        // New collection
+        let new_coll = db
+            .create_collection(String::from("coll"), String::from("scop"))
+            .unwrap();
+
+        assert!(new_coll
+            .create_index(
+                "new_index2",
+                &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField2"]]"#),
+            )
+            .unwrap());
+
+        let index2 = new_coll.get_index("new_index2").unwrap();
+        assert_eq!(index2.name(), "new_index2");
+        assert_eq!(index2.collection().full_name(), new_coll.full_name());
+    })
+}
+
+fn get_index_name_from_explain(explain: &str) -> Option<String> {
+    Regex::new(r"USING INDEX (\w+) ")
+        .unwrap()
+        .captures(explain)
+        .map(|c| c.get(1).unwrap().as_str().to_string())
+}
+
+#[test]
 fn full_index() {
     utils::with_db(|db| {
         assert!(db
@@ -88,12 +172,7 @@ fn full_index() {
         )
         .expect("create query");
 
-        let index = Regex::new(r"USING INDEX (\w+) ")
-            .unwrap()
-            .captures(&query.explain().unwrap())
-            .map(|c| c.get(1).unwrap().as_str().to_string())
-            .unwrap();
-
+        let index = get_index_name_from_explain(&query.explain().unwrap()).unwrap();
         assert_eq!(index, "new_index");
 
         // Check index not used
@@ -148,12 +227,7 @@ fn partial_index() {
         )
         .expect("create query");
 
-        let index = Regex::new(r"USING INDEX (\w+) ")
-            .unwrap()
-            .captures(&query.explain().unwrap())
-            .map(|c| c.get(1).unwrap().as_str().to_string())
-            .unwrap();
-
+        let index = get_index_name_from_explain(&query.explain().unwrap()).unwrap();
         assert_eq!(index, "new_index");
 
         // Check index not used
@@ -174,41 +248,95 @@ fn partial_index() {
 }
 
 #[test]
-fn parameters() {
+fn array_index() {
     utils::with_db(|db| {
-        let mut doc = Document::new_with_id("id1");
-        let mut props = doc.mutable_properties();
-        props.at("bool").put_bool(true);
-        props.at("f64").put_f64(3.1);
-        props.at("i64").put_i64(3);
-        props.at("string").put_string("allo");
-        db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
-            .expect("save");
+        let mut default_collection = db.default_collection().unwrap().unwrap();
+
+        // Add one document
+        let mut doc = Document::new();
+        doc.set_properties_as_json(
+            r#"{
+            "name":"Sam",
+            "contacts":[
+              {
+                "type":"primary",
+                "address":{"street":"1 St","city":"San Pedro","state":"CA"},
+                "phones":[
+                  {"type":"home","number":"310-123-4567"},
+                  {"type":"mobile","number":"310-123-6789"}
+                ]
+              },
+              {
+                "type":"secondary",
+                "address":{"street":"5 St","city":"Seattle","state":"WA"},
+                "phones":[
+                  {"type":"home","number":"206-123-4567"},
+                  {"type":"mobile","number":"206-123-6789"}
+                ]
+              }
+            ],
+            "likes":["soccer","travel"]
+          }"#,
+        )
+        .unwrap();
+        default_collection.save_document(&mut doc).unwrap();
+
+        // Index with one level of unnest
+        let index_configuration = ArrayIndexConfiguration::new(QueryLanguage::N1QL, "likes", "");
+
+        assert!(default_collection
+            .create_array_index("one_level", &index_configuration,)
+            .unwrap());
 
         let query = Query::new(
             db,
             QueryLanguage::N1QL,
-            "SELECT _.* FROM _ \
-                WHERE _.bool=$bool \
-                AND _.f64=$f64 \
-                AND _.i64=$i64 \
-                AND _.string=$string",
+            "SELECT _.name, _like FROM _ UNNEST _.likes as _like WHERE _like = 'travel'",
         )
-        .expect("create query");
+        .unwrap();
 
-        let mut params = MutableDict::new();
-        params.at("bool").put_bool(true);
-        params.at("f64").put_f64(3.1);
-        params.at("i64").put_i64(3);
-        params.at("string").put_string("allo");
-        query.set_parameters(&params);
+        let index = get_index_name_from_explain(&query.explain().unwrap()).unwrap();
+        assert_eq!(index, "one_level");
 
-        let params = query.parameters();
-        assert_eq!(params.get("bool").as_bool(), Some(true));
-        assert_eq!(params.get("f64").as_f64(), Some(3.1));
-        assert_eq!(params.get("i64").as_i64(), Some(3));
-        assert_eq!(params.get("string").as_string(), Some("allo"));
+        let mut result = query.execute().unwrap();
+        let row = result.next().unwrap();
+        assert_eq!(row.as_array().to_json(), r#"["Sam","travel"]"#);
 
-        assert_eq!(query.execute().unwrap().count(), 1);
-    });
+        assert!(result.next().is_none());
+
+        // Index with two levels of unnest
+        /*let index_configuration = ArrayIndexConfiguration::new(
+            QueryLanguage::N1QL,
+            "contacts[].phones",
+            "",//"type",
+        );
+
+        assert!(default_collection
+            .create_array_index(
+                "myindex",
+                &index_configuration,
+            ).unwrap()
+        );
+
+        let query = Query::new(
+            db,
+            QueryLanguage::N1QL,
+            r#"SELECT _.name, contact.type, phone.number
+                FROM _
+                UNNEST _.contacts as contact
+                UNNEST contact.phones as phone
+                WHERE phone.type = 'mobile'"#
+        ).unwrap();
+
+        println!("Explain: {}", query.explain().unwrap());
+
+        let index = get_index_name_from_explain(&query.explain().unwrap()).unwrap();
+        assert_eq!(index, "two_levels");
+
+        let mut result = query.execute().unwrap();
+        let row = result.next().unwrap();
+        assert_eq!(row.as_array().to_json(), r#"["Sam","travel"]"#);
+
+        assert!(result.next().is_none());*/
+    })
 }
