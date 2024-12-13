@@ -1,0 +1,22 @@
+{
+    "name":"Sam",
+    "contacts":[
+        {
+        "type":"primary",
+        "address":{"street":"1 St","city":"San Pedro","state":"CA"},
+        "phones":[
+            {"type":"home","number":"310-123-4567"},
+            {"type":"mobile","number":"310-123-6789"}
+        ]
+        },
+        {
+        "type":"secondary",
+        "address":{"street":"5 St","city":"Seattle","state":"WA"},
+        "phones":[
+            {"type":"home","number":"206-123-4567"},
+            {"type":"mobile","number":"206-123-6789"}
+        ]
+        }
+    ],
+    "likes":["soccer","travel"]
+}
