@@ -282,7 +282,8 @@ fn array_index() {
         default_collection.save_document(&mut doc).unwrap();
 
         // Index with one level of unnest
-        let index_configuration = ArrayIndexConfiguration::new(QueryLanguage::N1QL, "likes", "");
+        let index_configuration =
+            ArrayIndexConfiguration::new(QueryLanguage::N1QL, "likes", "").unwrap();
 
         let result = default_collection
             .create_array_index("one_level", &index_configuration)
@@ -307,7 +308,7 @@ fn array_index() {
 
         // Index with two levels of unnest
         let index_configuration =
-            ArrayIndexConfiguration::new(QueryLanguage::N1QL, "contacts[].phones", "type");
+            ArrayIndexConfiguration::new(QueryLanguage::N1QL, "contacts[].phones", "type").unwrap();
 
         assert!(default_collection
             .create_array_index("two_levels", &index_configuration,)
@@ -323,8 +324,6 @@ fn array_index() {
                 WHERE phone.type = 'mobile'"#,
         )
         .unwrap();
-
-        println!("Explain: {}", query.explain().unwrap());
 
         let index = get_index_name_from_explain(&query.explain().unwrap()).unwrap();
         assert_eq!(index, "two_levels");

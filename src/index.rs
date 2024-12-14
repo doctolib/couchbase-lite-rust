@@ -6,11 +6,11 @@ use crate::{
         CBLCollection_GetIndexNames, CBLCollection_CreateArrayIndex, CBLArrayIndexConfiguration,
         CBLQueryIndex, CBLQueryIndex_Name, CBLQueryIndex_Collection, CBLCollection_GetIndex,
     },
-    error::{Result, failure},
-    slice::{from_str, from_c_str},
+    error::{Error, Result, failure},
+    slice::{from_str, from_c_str, Slice},
     QueryLanguage, Array,
     collection::Collection,
-    check_error, retain,
+    check_error, retain, CouchbaseLiteError,
 };
 use std::ffi::CString;
 
@@ -44,8 +44,8 @@ impl ValueIndexConfiguration {
 #[derive(Debug)]
 pub struct ArrayIndexConfiguration {
     cbl_ref: CBLArrayIndexConfiguration,
-    _path: CString,
-    _expressions: CString,
+    _path: Slice<CString>,
+    _expressions: Slice<CString>,
 }
 
 impl CblRef for ArrayIndexConfiguration {
@@ -67,19 +67,24 @@ impl ArrayIndexConfiguration {
         indexed. The expressions could be specified in a JSON Array or in N1QL syntax
         using comma delimiter. If the array specified by the path contains scalar values,
         the expressions should be left unset or set to null. */
-    pub fn new(query_language: QueryLanguage, path: &str, expressions: &str) -> Self {
-        let path_c = CString::new(path).unwrap();
-        let expressions_c = CString::new(expressions).unwrap();
+    pub fn new(query_language: QueryLanguage, path: &str, expressions: &str) -> Result<Self> {
+        let path_c = CString::new(path)
+            .map_err(|_| Error::cbl_error(CouchbaseLiteError::InvalidParameter))?;
+        let expressions_c = CString::new(expressions)
+            .map_err(|_| Error::cbl_error(CouchbaseLiteError::InvalidParameter))?;
 
-        Self {
+        let path_s = from_c_str(path_c, path.len());
+        let expressions_s = from_c_str(expressions_c, expressions.len());
+
+        Ok(Self {
             cbl_ref: CBLArrayIndexConfiguration {
                 expressionLanguage: query_language as u32,
-                path: from_c_str(&path_c, path.len()).get_ref(),
-                expressions: from_c_str(&expressions_c, expressions.len()).get_ref(),
+                path: path_s.get_ref(),
+                expressions: expressions_s.get_ref(),
             },
-            _path: path_c,
-            _expressions: expressions_c,
-        }
+            _path: path_s,
+            _expressions: expressions_s,
+        })
     }
 }
 
