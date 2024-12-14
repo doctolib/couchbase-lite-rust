@@ -160,14 +160,14 @@ pub struct BlobReader<'r> {
     stream_ref: *mut CBLBlobReadStream,
 }
 
-impl<'r> CblRef for BlobReader<'r> {
+impl CblRef for BlobReader<'_> {
     type Output = *mut CBLBlobReadStream;
     fn get_ref(&self) -> Self::Output {
         self.stream_ref
     }
 }
 
-impl<'r> std::io::Read for BlobReader<'r> {
+impl std::io::Read for BlobReader<'_> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         unsafe {
             check_io(|err| {
@@ -182,7 +182,7 @@ impl<'r> std::io::Read for BlobReader<'r> {
     }
 }
 
-impl<'r> Drop for BlobReader<'r> {
+impl Drop for BlobReader<'_> {
     fn drop(&mut self) {
         unsafe {
             CBLBlobReader_Close(self.get_ref());
@@ -200,7 +200,7 @@ pub struct BlobWriter<'d> {
     db: PhantomData<&'d mut Database>,
 }
 
-impl<'d> CblRef for BlobWriter<'d> {
+impl CblRef for BlobWriter<'_> {
     type Output = *mut CBLBlobWriteStream;
     fn get_ref(&self) -> Self::Output {
         self.stream_ref
@@ -222,7 +222,7 @@ impl<'d> BlobWriter<'d> {
     }
 }
 
-impl<'r> std::io::Write for BlobWriter<'r> {
+impl std::io::Write for BlobWriter<'_> {
     fn write(&mut self, data: &[u8]) -> std::result::Result<usize, std::io::Error> {
         unsafe {
             check_io(|err| {
@@ -246,7 +246,7 @@ impl<'r> std::io::Write for BlobWriter<'r> {
     }
 }
 
-impl<'r> Drop for BlobWriter<'r> {
+impl Drop for BlobWriter<'_> {
     fn drop(&mut self) {
         unsafe { CBLBlobWriter_Close(self.get_ref()) }
     }

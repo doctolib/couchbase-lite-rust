@@ -442,14 +442,14 @@ pub struct Slot<'s> {
     owner: PhantomData<&'s mut MutableDict>,
 }
 
-impl<'s> CblRef for Slot<'s> {
+impl CblRef for Slot<'_> {
     type Output = FLSlot;
     fn get_ref(&self) -> Self::Output {
         self.cbl_ref
     }
 }
 
-impl<'s> Slot<'s> {
+impl Slot<'_> {
     pub fn put_null(self) {
         unsafe { FLSlot_SetNull(self.get_ref()) }
     }

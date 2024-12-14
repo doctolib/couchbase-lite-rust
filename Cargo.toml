@@ -2,6 +2,7 @@
 name = "couchbase_lite"
 version = "3.1.10-0"
 # The first three numbers correspond to the Couchbase Lite C release, the fourth number corresponds to the Doctolib release
+edition = "2021"
 
 [dependencies]
 enum_primitive = "*"

@@ -284,9 +284,10 @@ fn array_index() {
         // Index with one level of unnest
         let index_configuration = ArrayIndexConfiguration::new(QueryLanguage::N1QL, "likes", "");
 
-        assert!(default_collection
-            .create_array_index("one_level", &index_configuration,)
-            .unwrap());
+        let result = default_collection
+            .create_array_index("one_level", &index_configuration)
+            .unwrap();
+        assert!(result);
 
         let query = Query::new(
             db,
@@ -305,18 +306,12 @@ fn array_index() {
         assert!(result.next().is_none());
 
         // Index with two levels of unnest
-        /*let index_configuration = ArrayIndexConfiguration::new(
-            QueryLanguage::N1QL,
-            "contacts[].phones",
-            "",//"type",
-        );
+        let index_configuration =
+            ArrayIndexConfiguration::new(QueryLanguage::N1QL, "contacts[].phones", "type");
 
         assert!(default_collection
-            .create_array_index(
-                "myindex",
-                &index_configuration,
-            ).unwrap()
-        );
+            .create_array_index("two_levels", &index_configuration,)
+            .unwrap());
 
         let query = Query::new(
             db,
@@ -325,8 +320,9 @@ fn array_index() {
                 FROM _
                 UNNEST _.contacts as contact
                 UNNEST contact.phones as phone
-                WHERE phone.type = 'mobile'"#
-        ).unwrap();
+                WHERE phone.type = 'mobile'"#,
+        )
+        .unwrap();
 
         println!("Explain: {}", query.explain().unwrap());
 
@@ -334,9 +330,19 @@ fn array_index() {
         assert_eq!(index, "two_levels");
 
         let mut result = query.execute().unwrap();
-        let row = result.next().unwrap();
-        assert_eq!(row.as_array().to_json(), r#"["Sam","travel"]"#);
 
-        assert!(result.next().is_none());*/
+        let row = result.next().unwrap();
+        assert_eq!(
+            row.as_array().to_json(),
+            r#"["Sam","primary","310-123-6789"]"#
+        );
+
+        let row = result.next().unwrap();
+        assert_eq!(
+            row.as_array().to_json(),
+            r#"["Sam","secondary","206-123-6789"]"#
+        );
+
+        assert!(result.next().is_none());
     })
 }

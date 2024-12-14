@@ -30,8 +30,8 @@ use crate::{
     Listener,
 };
 
-use std::{os::raw::c_uint};
-use ListenerToken;
+use std::os::raw::c_uint;
+use crate::ListenerToken;
 
 /** Query languages. */
 pub enum QueryLanguage {

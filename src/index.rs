@@ -7,11 +7,12 @@ use crate::{
         CBLQueryIndex, CBLQueryIndex_Name, CBLQueryIndex_Collection, CBLCollection_GetIndex,
     },
     error::{Result, failure},
-    slice::from_str,
+    slice::{from_str, from_c_str},
     QueryLanguage, Array,
     collection::Collection,
     check_error, retain,
 };
+use std::ffi::CString;
 
 pub struct ValueIndexConfiguration {
     cbl_ref: CBLValueIndexConfiguration,
@@ -40,8 +41,11 @@ impl ValueIndexConfiguration {
     }
 }
 
+#[derive(Debug)]
 pub struct ArrayIndexConfiguration {
     cbl_ref: CBLArrayIndexConfiguration,
+    _path: CString,
+    _expressions: CString,
 }
 
 impl CblRef for ArrayIndexConfiguration {
@@ -64,14 +68,17 @@ impl ArrayIndexConfiguration {
         using comma delimiter. If the array specified by the path contains scalar values,
         the expressions should be left unset or set to null. */
     pub fn new(query_language: QueryLanguage, path: &str, expressions: &str) -> Self {
-        let s_path = from_str(path);
-        let s_expressions = from_str(expressions);
+        let path_c = CString::new(path).unwrap();
+        let expressions_c = CString::new(expressions).unwrap();
+
         Self {
             cbl_ref: CBLArrayIndexConfiguration {
                 expressionLanguage: query_language as u32,
-                path: s_path.get_ref(),
-                expressions: s_expressions.get_ref(),
+                path: from_c_str(&path_c, path.len()).get_ref(),
+                expressions: from_c_str(&expressions_c, expressions.len()).get_ref(),
             },
+            _path: path_c,
+            _expressions: expressions_c,
         }
     }
 }

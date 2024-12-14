@@ -98,6 +98,16 @@ pub fn from_str(s: &str) -> Slice<&str> {
     )
 }
 
+pub fn from_c_str(s: &CStr, len: usize) -> Slice<&CStr> {
+    Slice::wrap(
+        FLSlice {
+            buf: s.as_ptr().cast::<c_void>(),
+            size: len,
+        },
+        s,
+    )
+}
+
 pub fn from_bytes(s: &[u8]) -> Slice<&[u8]> {
     Slice::wrap(
         FLSlice {
@@ -114,7 +124,7 @@ impl FLSlice {
         if !self {
             return None;
         }
-        return Some(std::slice::from_raw_parts(self.buf.cast::<u8>(), self.size));
+        Some(std::slice::from_raw_parts(self.buf.cast::<u8>(), self.size))
     }
 
     pub(crate) unsafe fn as_str<'a>(&self) -> Option<&'a str> {
