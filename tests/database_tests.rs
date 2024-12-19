@@ -149,7 +149,8 @@ fn db_encryption_key() {
         directory: tmp_dir.path(),
         encryption_key: None,
     };
-    let encryption_key = EncryptionKey::new_from_password("password1").unwrap();
+    let encryption_key =
+        EncryptionKey::new_from_password(EncryptionAlgorithm::None, "password1").unwrap();
     let cfg_encryption1 = DatabaseConfiguration {
         directory: tmp_dir.path(),
         encryption_key: Some(encryption_key.clone()),

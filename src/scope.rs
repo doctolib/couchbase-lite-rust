@@ -1,10 +1,14 @@
 use crate::{
     CblRef, check_error, release, retain,
-    c_api::{CBLScope, CBLScope_Name, CBLScope_CollectionNames, CBLScope_Collection, CBLError},
+    c_api::{
+        CBLScope, CBLScope_Name, CBLScope_CollectionNames, CBLScope_Collection, CBLError,
+        CBLScope_Database,
+    },
     collection::Collection,
     error::Result,
     MutableArray,
     slice::from_str,
+    Database,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -13,6 +17,8 @@ pub struct Scope {
 }
 
 impl Scope {
+    pub const DEFAULT_NAME: &str = "_default";
+
     pub(crate) fn retain(cbl_ref: *mut CBLScope) -> Self {
         Self {
             cbl_ref: unsafe { retain(cbl_ref) },
@@ -26,6 +32,11 @@ impl Scope {
                 .to_string()
                 .unwrap_or_default()
         }
+    }
+
+    /** Returns the scope's database */
+    pub fn database(&self) -> Database {
+        unsafe { Database::wrap(CBLScope_Database(self.get_ref())) }
     }
 
     /** Returns the names of all collections in the scope. */

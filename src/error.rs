@@ -27,14 +27,14 @@ use std::fmt;
 
 //////// ERROR STRUCT:
 
-/** Error type. Wraps multiple types of errors in an enum. */
+/// Error type. Wraps multiple types of errors in an enum.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Error {
     pub code: ErrorCode,
     pub(crate) internal_info: Option<u32>,
 }
 
-/** The enum that stores the error domain and code for an Error. */
+/// The enum that stores the error domain and code for an Error.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum ErrorCode {
     CouchbaseLite(CouchbaseLiteError),
@@ -45,85 +45,142 @@ pub enum ErrorCode {
     WebSocket(i32),
 }
 
-// Redefine `Result` to assume our `Error` type
+/// Redefine `Result` to assume our `Error` type
 pub type Result<T> = std::result::Result<T, Error>;
 
 enum_from_primitive! {
-    /** Couchbase Lite error codes. */
+    /// Couchbase Lite error codes.
     #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub enum CouchbaseLiteError {
-        AssertionFailed = 1,    // Internal assertion failure
-        Unimplemented,          // Oops, an unimplemented API call
-        UnsupportedEncryption,  // Unsupported encryption algorithm
-        BadRevisionID,          // Invalid revision ID syntax
-        CorruptRevisionData,    // Revision contains corrupted/unreadable data
-        NotOpen,                // Database/KeyStore/index is not open
-        NotFound,               // Document not found
-        Conflict,               // Document update conflict
-        InvalidParameter,       // Invalid function parameter or struct value
-        UnexpectedError, /*10*/ // Internal unexpected C++ exception
-        CantOpenFile,           // Database file can't be opened; may not exist
-        IOError,                // File I/O error
-        MemoryError,            // Memory allocation failed (out of memory?)
-        NotWriteable,           // File is not writeable
-        CorruptData,            // Data is corrupted
-        Busy,                   // Database is busy/locked
-        NotInTransaction,       // Function must be called while in a transaction
-        TransactionNotClosed,   // Database can't be closed while a transaction is open
-        Unsupported,            // Operation not supported in this database
-        NotADatabaseFile,/*20*/ // File is not a database, or encryption key is wrong
-        WrongFormat,            // Database exists but not in the format/storage requested
-        Crypto,                 // Encryption/decryption error
-        InvalidQuery,           // Invalid query
-        MissingIndex,           // No such index, or query requires a nonexistent index
-        InvalidQueryParam,      // Unknown query param name, or param number out of range
-        RemoteError,            // Unknown error from remote server
-        DatabaseTooOld,         // Database file format is older than what I can open
-        DatabaseTooNew,         // Database file format is newer than what I can open
-        BadDocID,               // Invalid document ID
-        CantUpgradeDatabase,/*30*/ // DB can't be upgraded (might be unsupported dev version)
+        /// Internal assertion failure
+        AssertionFailed = 1,
+        /// Oops, an unimplemented API call
+        Unimplemented,
+        /// Unsupported encryption algorithm
+        UnsupportedEncryption,
+        /// Invalid revision ID syntax
+        BadRevisionID,
+        /// Revision contains corrupted/unreadable data
+        CorruptRevisionData,
+        /// Database/KeyStore/index is not open
+        NotOpen,
+        /// Document not found
+        NotFound,
+        /// Document update conflict
+        Conflict,
+        /// Invalid function parameter or struct value
+        InvalidParameter,
+        /// Internal unexpected C++ exception
+        UnexpectedError, /*10*/
+        /// Database file can't be opened; may not exist
+        CantOpenFile,
+        /// File I/O error
+        IOError,
+        /// Memory allocation failed (out of memory?)
+        MemoryError,
+        /// File is not writeable
+        NotWriteable,
+        /// Data is corrupted
+        CorruptData,
+        /// Database is busy/locked
+        Busy,
+        /// Function must be called while in a transaction
+        NotInTransaction,
+        /// Database can't be closed while a transaction is open
+        TransactionNotClosed,
+        /// Operation not supported in this database
+        Unsupported,
+        /// File is not a database, or encryption key is wrong
+        NotADatabaseFile,/*20*/
+        /// Database exists but not in the format/storage requested
+        WrongFormat,
+        /// Encryption/decryption error
+        Crypto,
+        /// Invalid query
+        InvalidQuery,
+        /// No such index, or query requires a nonexistent index
+        MissingIndex,
+        /// Unknown query param name, or param number out of range
+        InvalidQueryParam,
+        /// Unknown error from remote server
+        RemoteError,
+        /// Database file format is older than what I can open
+        DatabaseTooOld,
+        /// Database file format is newer than what I can open
+        DatabaseTooNew,
+        /// Invalid document ID
+        BadDocID,
+        /// DB can't be upgraded (might be unsupported dev version)
+        CantUpgradeDatabase,/*30*/
 
-        UntranslatableError = 1000,  // Can't translate native error (unknown domain or code)
+        /// Can't translate native error (unknown domain or code)
+        UntranslatableError = 1000,
     }
 }
 
 enum_from_primitive! {
-    /** Fleece error codes. */
+    /// Fleece error codes
     #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub enum FleeceError {
-        MemoryError = 1,    // Out of memory, or allocation failed
-        OutOfRange,         // Array index or iterator out of range
-        InvalidData,        // Bad input data (NaN, non-string key, etc.)
-        EncodeError,        // Structural error encoding (missing value, too many ends, etc.)
-        JSONError,          // Error parsing JSON
-        UnknownValue,       // Unparseable data in a Value (corrupt? Or from some distant future?)
-        InternalError,      // Something that shouldn't happen
-        NotFound,           // Key not found
-        SharedKeysStateError, // Misuse of shared keys (not in transaction, etc.)
-        POSIXError,         // Something went wrong at the OS level (file I/O, etc.)
-        Unsupported,        // Operation is unsupported
+        /// Out of memory, or allocation failed
+        MemoryError = 1,
+        /// Array index or iterator out of range
+        OutOfRange,
+        /// Bad input data (NaN, non-string key, etc.)
+        InvalidData,
+        /// Structural error encoding (missing value, too many ends, etc.)
+        EncodeError,
+        /// Error parsing JSON
+        JSONError,
+        /// Unparseable data in a Value (corrupt? Or from some distant future?)
+        UnknownValue,
+        /// Something that shouldn't happen
+        InternalError,
+        /// Key not found
+        NotFound,
+        /// Misuse of shared keys (not in transaction, etc.)
+        SharedKeysStateError,
+        /// Something went wrong at the OS level (file I/O, etc.)
+        POSIXError,
+        /// Operation is unsupported
+        Unsupported,
     }
 }
 
 enum_from_primitive! {
-    /** Network error codes defined by Couchbase Lite. */
+    /// Network error codes defined by Couchbase Lite.
     #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub enum NetworkError {
-        DNSFailure = 1,            // DNS lookup failed
-        UnknownHost,               // DNS server doesn't know the hostname
-        Timeout,                   // No response received before timeout
-        InvalidURL,                // Invalid URL
-        TooManyRedirects,          // HTTP redirect loop
-        TLSHandshakeFailed,        // Low-level error establishing TLS
-        TLSCertExpired,            // Server's TLS certificate has expired
-        TLSCertUntrusted,          // Cert isn't trusted for other reason
-        TLSClientCertRequired,     // Server requires client to have a TLS certificate
-        TLSClientCertRejected,     // Server rejected my TLS client certificate
-        TLSCertUnknownRoot,        // Self-signed cert, or unknown anchor cert
-        InvalidRedirect,           // Attempted redirect to invalid URL
-        Unknown,                   // Unknown networking error
-        TLSCertRevoked,            // Server's cert has been revoked
-        TLSCertNameMismatch,       // Server cert's name does not match DNS name
+        /// DNS lookup failed
+        DNSFailure = 1,
+        /// DNS server doesn't know the hostname
+        UnknownHost,
+        /// No response received before timeout
+        Timeout,
+        /// Invalid URL
+        InvalidURL,
+        /// HTTP redirect loop
+        TooManyRedirects,
+        /// Low-level error establishing TLS
+        TLSHandshakeFailed,
+        /// Server's TLS certificate has expired
+        TLSCertExpired,
+        /// Cert isn't trusted for other reason
+        TLSCertUntrusted,
+        /// Server requires client to have a TLS certificate
+        TLSClientCertRequired,
+        /// Server rejected my TLS client certificate
+        TLSClientCertRejected,
+        /// Self-signed cert, or unknown anchor cert
+        TLSCertUnknownRoot,
+        /// Attempted redirect to invalid URL
+        InvalidRedirect,
+        /// Unknown networking error
+        Unknown,
+        /// Server's cert has been revoked
+        TLSCertRevoked,
+        /// Server cert's name does not match DNS name
+        TLSCertNameMismatch,
     }
 }
 
@@ -191,6 +248,7 @@ impl Error {
         }
     }
 
+    /// Returns a message describing an error.
     pub fn message(&self) -> String {
         if let ErrorCode::CouchbaseLite(e) = self.code {
             if e == CouchbaseLiteError::UntranslatableError {
@@ -304,8 +362,8 @@ where
     check_failure(ok, &error)
 }
 
-// The first parameter is a function that returns a non-null pointer or sets the error.
-// The second parameter is a function that takes the returned pointer and returns the final result.
+/// The first parameter is a function that returns a non-null pointer or sets the error.
+/// The second parameter is a function that takes the returned pointer and returns the final result.
 pub(crate) fn check_ptr<PTR, F, MAPF, RESULT>(func: F, map: MAPF) -> Result<RESULT>
 where
     F: Fn(*mut CBLError) -> *mut PTR,
@@ -320,8 +378,8 @@ where
     }
 }
 
-// The first parameter is a function that returns a non-null pointer or sets the error.
-// The second parameter is a function that takes the returned pointer and returns the final result.
+/// The first parameter is a function that returns a non-null pointer or sets the error.
+/// The second parameter is a function that takes the returned pointer and returns the final result.
 pub(crate) fn check_io<F>(mut func: F) -> std::io::Result<usize>
 where
     F: FnMut(*mut CBLError) -> i32,

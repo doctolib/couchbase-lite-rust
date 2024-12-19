@@ -26,6 +26,10 @@
 #include <CouchbaseLite/CBLEncryptable.h>
 #include <CouchbaseLite/CBLLog.h>
 #include <CouchbaseLite/CBLPlatform.h>
+#include <CouchbaseLite/CBLPrediction.h>
 #include <CouchbaseLite/CBLQuery.h>
+#include <CouchbaseLite/CBLQueryIndex.h>
+#include <CouchbaseLite/CBLQueryIndexTypes.h>
+#include <CouchbaseLite/CBLQueryTypes.h>
 #include <CouchbaseLite/CBLReplicator.h>
 #include <CouchbaseLite/CBLScope.h>

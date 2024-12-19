@@ -21,7 +21,7 @@ use crate::{
 };
 
 use std::borrow::Cow;
-use std::ffi::{CStr, c_void};
+use std::ffi::{CStr, CString, c_void};
 use std::fmt::{Debug, Formatter};
 use std::ptr::{self, drop_in_place};
 use std::str;
@@ -98,6 +98,16 @@ pub fn from_str(s: &str) -> Slice<&str> {
     )
 }
 
+pub fn from_c_str(s: CString, len: usize) -> Slice<CString> {
+    Slice::wrap(
+        FLSlice {
+            buf: s.as_ptr().cast::<c_void>(),
+            size: len,
+        },
+        s,
+    )
+}
+
 pub fn from_bytes(s: &[u8]) -> Slice<&[u8]> {
     Slice::wrap(
         FLSlice {
@@ -114,7 +124,7 @@ impl FLSlice {
         if !self {
             return None;
         }
-        return Some(std::slice::from_raw_parts(self.buf.cast::<u8>(), self.size));
+        Some(std::slice::from_raw_parts(self.buf.cast::<u8>(), self.size))
     }
 
     pub(crate) unsafe fn as_str<'a>(&self) -> Option<&'a str> {
