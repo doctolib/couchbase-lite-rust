@@ -27,9 +27,9 @@ use crate::{
         CBLDatabase_Open, CBLDatabase_Path, CBLDatabase_PerformMaintenance,
         CBLDatabase_SendNotifications, CBLEncryptionKey, CBLError, CBL_DatabaseExists,
         CBL_DeleteDatabase, CBLEncryptionKey_FromPassword, FLString, kCBLMaintenanceTypeCompact,
-        kCBLEncryptionNone, kCBLMaintenanceTypeFullOptimize, kCBLMaintenanceTypeIntegrityCheck,
-        kCBLMaintenanceTypeOptimize, kCBLMaintenanceTypeReindex, CBL_CopyDatabase,
-        CBLDatabase_ScopeNames, CBLDatabase_CollectionNames, CBLDatabase_Scope,
+        kCBLEncryptionAES256, kCBLEncryptionNone, kCBLMaintenanceTypeFullOptimize,
+        kCBLMaintenanceTypeIntegrityCheck, kCBLMaintenanceTypeOptimize, kCBLMaintenanceTypeReindex,
+        CBL_CopyDatabase, CBLDatabase_ScopeNames, CBLDatabase_CollectionNames, CBLDatabase_Scope,
         CBLDatabase_Collection, CBLDatabase_CreateCollection, CBLDatabase_DeleteCollection,
         CBLDatabase_DefaultScope, CBLDatabase_DefaultCollection,
     },
@@ -41,16 +41,32 @@ use crate::{
 use std::path::{Path, PathBuf};
 use std::ptr;
 
+enum_from_primitive! {
+    /// Database encryption algorithms
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum EncryptionAlgorithm {
+        Compact = kCBLEncryptionNone as isize,
+        Reindex = kCBLEncryptionAES256 as isize,
+    }
+}
+
+/// Database encryption key size
+pub const ENCRYPTION_KEY_SIZE_AES256: i64 = 32;
+
+/// Encryption key specified in a DatabaseConfiguration
 #[derive(Debug, Clone)]
 pub struct EncryptionKey {
     cbl_ref: Box<CBLEncryptionKey>,
 }
 
 impl EncryptionKey {
-    pub fn new_from_password(password: &str) -> Option<Self> {
+    /// Derives an encryption key from a password. If your UI uses passwords, call this function to
+    /// create the key used to encrypt the database. It is designed for security, and deliberately
+    /// runs slowly to make brute-force attacks impractical.
+    pub fn new_from_password(algorithm: EncryptionAlgorithm, password: &str) -> Option<Self> {
         unsafe {
             let key = CBLEncryptionKey {
-                algorithm: kCBLEncryptionNone,
+                algorithm: algorithm as u32,
                 bytes: [0; 32],
             };
             let encryption_key = Self {
@@ -76,7 +92,7 @@ impl CblRef for EncryptionKey {
     }
 }
 
-/** Database configuration options. */
+/// Database configuration options
 #[derive(Debug, Clone)]
 pub struct DatabaseConfiguration<'a> {
     pub directory: &'a std::path::Path,
@@ -84,17 +100,26 @@ pub struct DatabaseConfiguration<'a> {
 }
 
 enum_from_primitive! {
+    /// Maintenance Type used when performing database maintenance
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum MaintenanceType {
+        /// Compact the database file and delete unused attachments.
         Compact         = kCBLMaintenanceTypeCompact as isize,
+        /// Rebuild the entire database's indexes.
         Reindex         = kCBLMaintenanceTypeReindex as isize,
+        /// Check for the database’s corruption. If found, an error will be returned
         IntegrityCheck  = kCBLMaintenanceTypeIntegrityCheck as isize,
+        /// Partially scan indexes to gather database statistics that help optimize queries.
+        /// This operation is also performed automatically when closing the database.
         Optimize        = kCBLMaintenanceTypeOptimize as isize,
+        /// Fully scan all indexes to gather database statistics that help optimize queries.
+        /// This may take some time, depending on the size of the indexes, but it doesn't have to
+        /// be redone unless the database changes drastically, or new indexes are created.
         FullOptimize    = kCBLMaintenanceTypeFullOptimize as isize,
     }
 }
 
-/** A database change listener callback, invoked after one or more documents are changed on disk. */
+/// A database change listener callback, invoked after one or more documents are changed on disk
 #[deprecated(note = "please use `CollectionChangeListener` on default collection instead")]
 type DatabaseChangeListener = Box<dyn Fn(&Database, Vec<String>)>;
 
@@ -116,7 +141,7 @@ unsafe extern "C" fn c_database_change_listener(
     (*callback)(&database, doc_ids);
 }
 
-/** Callback indicating that the database (or an object belonging to it) is ready to call one or more listeners. */
+/// Callback indicating that the database (or an object belonging to it) is ready to call one or more listeners.
 type BufferNotifications = fn(db: &Database);
 #[no_mangle]
 unsafe extern "C" fn c_database_buffer_notifications(
@@ -130,7 +155,7 @@ unsafe extern "C" fn c_database_buffer_notifications(
     callback(&database);
 }
 
-/** A connection to an open database. */
+/// A connection to an open database
 #[derive(Debug, PartialEq, Eq)]
 pub struct Database {
     cbl_ref: *mut CBLDatabase,
@@ -145,21 +170,23 @@ impl CblRef for Database {
 
 impl Database {
     //////// CONSTRUCTORS:
+
+    /// Takes ownership of the object and increase it's reference counter.
     pub(crate) fn retain(cbl_ref: *mut CBLDatabase) -> Self {
         Self {
             cbl_ref: unsafe { retain(cbl_ref) },
         }
     }
 
+    /// References the object without taking ownership and increasing it's reference counter
     pub(crate) const fn wrap(cbl_ref: *mut CBLDatabase) -> Self {
         Self { cbl_ref }
     }
 
-    /** Opens a database, or creates it if it doesn't exist yet, returning a new `Database`
-    instance.
-
-    It's OK to open the same database file multiple times. Each `Database` instance is
-    independent of the others (and must be separately closed and released.) */
+    /// Opens a database, or creates it if it doesn't exist yet, returning a new `Database`
+    /// instance.
+    /// It's OK to open the same database file multiple times. Each `Database` instance is
+    /// independent of the others (and must be separately closed and released.)
     pub fn open(name: &str, config: Option<DatabaseConfiguration>) -> Result<Self> {
         unsafe {
             if let Some(cfg) = config {
@@ -185,7 +212,7 @@ impl Database {
 
     //////// OTHER STATIC METHODS:
 
-    /** Returns true if a database with the given name exists in the given directory. */
+    /// Returns true if a database with the given name exists in the given directory.
     pub fn exists<P: AsRef<Path>>(name: &str, in_directory: P) -> bool {
         unsafe {
             CBL_DatabaseExists(
@@ -195,8 +222,8 @@ impl Database {
         }
     }
 
-    /** Copies a database file to a new location, and assigns it a new internal UUID to distinguish
-    it from the original database when replicating. */
+    /// Copies a database file to a new location, and assigns it a new internal UUID to distinguish
+    /// it from the original database when replicating.
     pub fn copy_file<P: AsRef<Path>>(
         current_db_full_path: P,
         new_db_name: &str,
@@ -245,7 +272,7 @@ impl Database {
         check_error(&error)
     }
 
-    /** Deletes a database file. If the database file is open, an error is returned. */
+    /// Deletes a database file. If the database file is open, an error is returned.
     pub fn delete_file<P: AsRef<Path>>(name: &str, in_directory: P) -> Result<bool> {
         unsafe {
             let mut error = CBLError::default();
@@ -265,18 +292,18 @@ impl Database {
 
     //////// OPERATIONS:
 
-    /** Closes an open database. */
+    /// Closes an open database.
     pub fn close(self) -> Result<()> {
         unsafe { check_bool(|error| CBLDatabase_Close(self.get_ref(), error)) }
     }
 
-    /** Closes and deletes a database. If there are any other connections to the database,
-    an error is returned. */
+    /// Closes and deletes a database. If there are any other connections to the database,
+    /// error is returned.
     pub fn delete(self) -> Result<()> {
         unsafe { check_bool(|error| CBLDatabase_Delete(self.get_ref(), error)) }
     }
 
-    /** Compacts a database file, freeing up unused disk space. */
+    /// Runs a maintenance operation on the database.
     pub fn perform_maintenance(&mut self, of_type: MaintenanceType) -> Result<()> {
         unsafe {
             check_bool(|error| {
@@ -285,11 +312,11 @@ impl Database {
         }
     }
 
-    /** Invokes the callback within a database transaction
-    - Multiple writes are _much_ faster when grouped in a transaction.
-    - Changes will not be visible to other Database instances on the same database until
-           the transaction ends.
-    - Transactions can nest. Changes are not committed until the outer one ends. */
+    /// Invokes the callback within a database transaction
+    ///   - Multiple writes are _much_ faster when grouped in a transaction.
+    ///   - Changes will not be visible to other Database instances on the same database until
+    ///     the transaction ends.
+    ///   - Transactions can nest. Changes are not committed until the outer one ends.
     pub fn in_transaction<T, F>(&mut self, mut callback: F) -> Result<T>
     where
         F: FnMut(&mut Self) -> Result<T>,
@@ -309,7 +336,7 @@ impl Database {
         result
     }
 
-    /** Encrypts or decrypts a database, or changes its encryption key. */
+    /// Encrypts or decrypts a database, or changes its encryption key.
     pub fn change_encryption_key(&mut self, encryption_key: &EncryptionKey) -> Result<()> {
         unsafe {
             check_bool(|error| {
@@ -320,25 +347,25 @@ impl Database {
 
     //////// ACCESSORS:
 
-    /** Returns the database's name. */
+    /// Returns the database's name.
     pub fn name(&self) -> &str {
         unsafe { CBLDatabase_Name(self.get_ref()).as_str().unwrap() }
     }
 
-    /** Returns the database's full filesystem path. */
+    /// Returns the database's full filesystem path.
     pub fn path(&self) -> PathBuf {
         unsafe { PathBuf::from(CBLDatabase_Path(self.get_ref()).to_string().unwrap()) }
     }
 
-    /** Returns the number of documents in the database. */
+    /// Returns the number of documents in the database.
     #[deprecated(note = "please use `count` on the default collection instead")]
     pub fn count(&self) -> u64 {
         unsafe { CBLDatabase_Count(self.get_ref()) }
     }
 
-    /** Returns the names of all existing scopes in the database.
-    The scope exists when there is at least one collection created under the scope.
-    The default scope is exceptional in that it will always exists even there are no collections under it. */
+    /// Returns the names of all existing scopes in the database.
+    ///   - the default scope (_default) always exists.
+    ///   - other scopes exist when it contains at least one collection
     pub fn scope_names(&self) -> Result<Vec<String>> {
         let mut error = CBLError::default();
         let array = unsafe { CBLDatabase_ScopeNames(self.get_ref(), &mut error) };
@@ -351,7 +378,7 @@ impl Database {
         })
     }
 
-    /** Returns the names of all collections in the scope. */
+    /// Returns the names of all collections in the scope.
     pub fn collection_names(&self, scope_name: String) -> Result<Vec<String>> {
         let scope_name = from_str(&scope_name);
         let mut error = CBLError::default();
@@ -367,9 +394,9 @@ impl Database {
         })
     }
 
-    /** Returns an existing scope with the given name.
-    The scope exists when there is at least one collection created under the scope.
-    The default scope is exception in that it will always exists even there are no collections under it. */
+    /// Returns an existing scope with the given name.
+    ///   - the default scope (_default) always exists.
+    ///   - other scopes exist when it contains at least one collection
     pub fn scope(&self, scope_name: String) -> Result<Option<Scope>> {
         let scope_name = from_str(&scope_name);
         let mut error = CBLError::default();
@@ -384,7 +411,7 @@ impl Database {
         })
     }
 
-    /** Returns the existing collection with the given name and scope. */
+    /// Returns the existing collection with the given name and scope.
     pub fn collection(
         &self,
         collection_name: String,
@@ -411,13 +438,13 @@ impl Database {
         })
     }
 
-    /** Create a new collection.
-    The naming rules of the collections and scopes are as follows:
-        - Must be between 1 and 251 characters in length.
-        - Can only contain the characters A-Z, a-z, 0-9, and the symbols _, -, and %.
-        - Cannot start with _ or %.
-        - Both scope and collection names are case sensitive.
-    If the collection already exists, the existing collection will be returned. */
+    /// Create a new collection.
+    /// The naming rules of the collections and scopes are as follows:
+    ///     - Must be between 1 and 251 characters in length.
+    ///     - Can only contain the characters A-Z, a-z, 0-9, and the symbols _, -, and %.
+    ///     - Cannot start with _ or %.
+    ///     - Both scope and collection names are case sensitive.
+    /// If the collection already exists, the existing collection will be returned.
     pub fn create_collection(
         &self,
         collection_name: String,
@@ -438,13 +465,8 @@ impl Database {
         check_error(&error).map(|()| Collection::retain(collection))
     }
 
-    /** Delete an existing collection.
-    @note  The default collection cannot be deleted.
-    @param db  The database.
-    @param collectionName  The name of the collection.
-    @param scopeName  The name of the scope.
-    @param outError  On failure, the error will be written here.
-    @return  True if success, or False if an error occurred. */
+    /// Delete an existing collection.
+    /// The default collection cannot be deleted.
     pub fn delete_collection(&self, collection_name: String, scope_name: String) -> Result<()> {
         let collection_name = from_str(&collection_name);
         let scope_name = from_str(&scope_name);
@@ -460,7 +482,7 @@ impl Database {
         }
     }
 
-    /** Returns the default scope. */
+    /// Returns the default scope.
     pub fn default_scope(&self) -> Result<Scope> {
         let mut error = CBLError::default();
         let scope = unsafe { CBLDatabase_DefaultScope(self.get_ref(), &mut error) };
@@ -468,7 +490,7 @@ impl Database {
         check_error(&error).map(|()| Scope::retain(scope))
     }
 
-    /** Returns the default collection. */
+    /// Returns the default collection.
     pub fn default_collection(&self) -> Result<Option<Collection>> {
         let mut error = CBLError::default();
         let collection = unsafe { CBLDatabase_DefaultCollection(self.get_ref(), &mut error) };
@@ -482,6 +504,7 @@ impl Database {
         })
     }
 
+    /// Returns the default collection.
     pub fn default_collection_or_error(&self) -> Result<Collection> {
         let mut error = CBLError::default();
         let collection = unsafe { CBLDatabase_DefaultCollection(self.get_ref(), &mut error) };
@@ -497,15 +520,14 @@ impl Database {
 
     //////// NOTIFICATIONS:
 
-    /** Registers a database change listener function. It will be called after one or more
-        documents are changed on disk. Remember to keep the reference to the ChangeListener
-        if you want the callback to keep working.
-
-        # Lifetime
-
-        The listener is deleted at the end of life of the `Listener` object.
-        You must keep the `Listener` object as long as you need it.
-    */
+    /// Registers a database change listener function. It will be called after one or more
+    /// documents are changed on disk. Remember to keep the reference to the ChangeListener
+    /// if you want the callback to keep working.
+    ///
+    /// # Lifetime
+    ///
+    /// The listener is deleted at the end of life of the `Listener` object.
+    /// You must keep the `Listener` object alive as long as you need it.
     #[must_use]
     #[deprecated(note = "please use `add_listener` on default collection instead")]
     pub fn add_listener(
@@ -529,10 +551,10 @@ impl Database {
         }
     }
 
-    /** Switches the database to buffered-notification mode. Notifications for objects belonging
-    to this database (documents, queries, replicators, and of course the database) will not be
-    called immediately; your callback function will be called instead. You can then call
-    `send_notifications` when you're ready. */
+    /// Switches the database to buffered-notification mode. Notifications for objects belonging
+    /// to this database (documents, queries, replicators, and of course the database) will not be
+    /// called immediately; your callback function will be called instead. You can then call
+    /// `send_notifications` when you're ready.
     pub fn buffer_notifications(&self, callback: BufferNotifications) {
         unsafe {
             let callback = callback as *mut std::ffi::c_void;
@@ -545,8 +567,8 @@ impl Database {
         }
     }
 
-    /** Immediately issues all pending notifications for this database, by calling their listener
-    callbacks. (Only useful after `buffer_notifications` has been called.) */
+    /// Immediately issues all pending notifications for this database, by calling their listener
+    /// callbacks. (Only useful after `buffer_notifications` has been called.) */
     pub fn send_notifications(&self) {
         unsafe {
             CBLDatabase_SendNotifications(self.get_ref());

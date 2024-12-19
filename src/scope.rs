@@ -17,6 +17,8 @@ pub struct Scope {
 }
 
 impl Scope {
+    pub const DEFAULT_NAME: &str = "_default";
+
     pub(crate) fn retain(cbl_ref: *mut CBLScope) -> Self {
         Self {
             cbl_ref: unsafe { retain(cbl_ref) },

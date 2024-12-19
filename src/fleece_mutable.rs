@@ -36,12 +36,17 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::ptr;
 
+/// Option flags for making mutable copies of values.
 #[derive(Debug, Clone, Copy)]
 pub enum CopyFlags {
-    Default = 0,            // Shallow copy of mutable values
-    Deep = 1,               // Deep copy of mutable values
-    CopyImmutables = 2,     // Make copies of immutable values too
-    DeepCopyImmutables = 3, // The works
+    /// Shallow copy of mutable values
+    Default = 0,
+    /// Deep copy of mutable values
+    Deep = 1,
+    /// Make copies of immutable values too
+    CopyImmutables = 2,
+    /// The works
+    DeepCopyImmutables = 3,
 }
 
 //////// MUTABLE ARRAY:
@@ -58,6 +63,8 @@ impl CblRef for MutableArray {
 }
 
 impl MutableArray {
+    //////// CONSTRUCTORS:
+
     pub fn new() -> Self {
         unsafe {
             Self {
