@@ -45,8 +45,8 @@ enum_from_primitive! {
     /// Database encryption algorithms
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum EncryptionAlgorithm {
-        Compact = kCBLEncryptionNone as isize,
-        Reindex = kCBLEncryptionAES256 as isize,
+        None = kCBLEncryptionNone as isize,
+        AES256 = kCBLEncryptionAES256 as isize,
     }
 }
 
