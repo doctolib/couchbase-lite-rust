@@ -38,7 +38,7 @@ The different releases can be found in [this page][CBL_DOWNLOAD_PAGE].
 Running the following script will download and setup the libraries locally:
 
 ```shell
-$ ./update_cblite_c.sh
+$ ./update_cblite_c.sh -v 3.2.1
 ```
 
 If the command fails on MacOS when downloading the packages, you might need to install wget or a recent bash version:
