@@ -246,10 +246,16 @@ rm -rf $scriptDir/libcblite
 
 cp -R $tmpLibcbliteFolder $scriptDir
 
+rm -rf $tmpFolder
+
 echoGreen "Replacing libcblite successful"
 
 # ################### #
 # Strip the libraries #
 # ################### #
 
+echoGreen "Strip libraries"
+
 DOCKER_BUILDKIT=1 docker build --file $scriptDir/Dockerfile -t strip --output $scriptDir/libcblite $scriptDir
+
+echoGreen "Stripping libcblite successful"
