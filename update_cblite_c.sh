@@ -244,7 +244,7 @@ echoGreen "Replace libcblite directory by newly package one"
 
 rm -rf $scriptDir/libcblite
 
-cp -R $libFolder $scriptDir
+cp -R $tmpLibcbliteFolder $scriptDir
 
 echoGreen "Replacing libcblite successful"
 
