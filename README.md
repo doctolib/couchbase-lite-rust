@@ -35,13 +35,13 @@ They are present in the directory `libcblite`.
 
 The different releases can be found in [this page][CBL_DOWNLOAD_PAGE].
 
-Running the following script will download and setup the libraries locally:
+When a new C release is available, a new Rust release must be created. Running the following script will download and setup the libraries locally:
 
 ```shell
 $ ./update_cblite_c.sh -v 3.2.1
 ```
 
-If the command fails on MacOS when downloading the packages, you might need to install wget or a recent bash version:
+If the script fails on MacOS, you might need to install wget or a recent bash version:
 
 ```shell
 $ brew install wget
@@ -50,7 +50,7 @@ $ brew install bash
 
 After that, fix the compilation & tests and you can create a pull request.
 
-New features should also be added to the Rust API at some point.
+New C features should also be added to the Rust API at some point.
 
 ### Test
 
@@ -80,9 +80,7 @@ $ LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nigh
 
 [C API reference][CBL_API_REFERENCE]
 
-The Rust API is mostly method-for-method compatible with the languages documented there, except
-down at the document property level (dictionaries, arrays, etc.) where I haven't yet written
-compatible bindings. For those APIs you can check out the document "[Using Fleece][FLEECE]".
+[Using Fleece][FLEECE]
 
 [RUST]: https://www.rust-lang.org
 
