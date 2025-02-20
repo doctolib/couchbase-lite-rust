@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 RED="\e[31m"
 GREEN="\e[32m"
 ENDCOLOR="\e[0m"
@@ -53,15 +55,6 @@ else
   echoGreen "All good, let's start with CBlite $version :-)"
 fi
 
-declare -i errors=0
-function checkErrors() {
-    if [ ${errors} -ne 0 ]
-    then
-        >&2 echoRed "Failed at the following step: $1"
-        exit 1
-    fi
-}
-
 tmpFolder=$(mktemp -d)
 echo "Temporary directory ${tmpFolder}"
 
@@ -89,11 +82,7 @@ function download() {
     local url="https://packages.couchbase.com/releases/couchbase-lite-c/${version}/couchbase-lite-c-enterprise-${version}-${suffix}"
     local file="${tmpDownloadFolder}/${suffix}"
 
-    if ! wget --quiet --show-progress --output-document "${file}" "${url}"
-    then
-        >&2 echo "Unable to download '${url}'."
-        errors+=1
-    fi
+    wget --quiet --show-progress --output-document "${file}" "${url}"
 }
 
 for platform in "${!platforms[@]}"
@@ -104,7 +93,6 @@ do
     download $fileName
 done
 
-checkErrors "Download packages"
 echoGreen "Downloading successful"
 
 # ############## #
