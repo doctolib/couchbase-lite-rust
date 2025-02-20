@@ -4,6 +4,7 @@ set -e
 
 RED="\e[31m"
 GREEN="\e[32m"
+BLUE="\e[34m"
 ENDCOLOR="\e[0m"
 
 function echoGreen() {
@@ -12,6 +13,10 @@ function echoGreen() {
 
 function echoRed() {
     echo -e "${RED}$1${ENDCOLOR}"
+}
+
+function echoBlue {
+    echo -e "${BLUE}$1${ENDCOLOR}"
 }
 
 scriptDir=$(dirname "$0")
@@ -58,16 +63,6 @@ fi
 tmpFolder=$(mktemp -d)
 echo "Temporary directory ${tmpFolder}"
 
-# ################################## #
-# Download couchbase-lite-C packages #
-# ################################## #
-
-echoGreen "Start downloading"
-
-tmpDownloadFolder="${tmpFolder}/download"
-mkdir $tmpDownloadFolder
-echo "Temporary download directory ${tmpFolder}"
-
 declare -A platforms=(
     [linux]=linux-x86_64.tar.gz 
     [windows]=windows-x86_64.zip
@@ -76,167 +71,189 @@ declare -A platforms=(
     [ios]=ios.zip
 )
 
-function download() {
-    local suffix="$1"
+variants=("community", "enterprise")
 
-    local url="https://packages.couchbase.com/releases/couchbase-lite-c/${version}/couchbase-lite-c-enterprise-${version}-${suffix}"
-    local file="${tmpDownloadFolder}/${suffix}"
+for variant in ${myArray[@]}; do
+    echoBlue "Start variant $variant"
 
-    wget --quiet --show-progress --output-document "${file}" "${url}"
-}
 
-for platform in "${!platforms[@]}"
-do
-    echo "Downloading ${platform} package"
+    # ################################## #
+    # Download couchbase-lite-C packages #
+    # ################################## #
 
-    fileName=${platforms[$platform]}
-    download $fileName
+    echoGreen "Start downloading"
+
+    tmpDownloadFolder="${tmpFolder}/${variant}/download"
+    mkdir $tmpDownloadFolder
+    echo "Temporary download directory ${tmpFolder}"
+
+    function download() {
+        local platformName="$1"
+        local variant="$2"
+
+        local url="https://packages.couchbase.com/releases/couchbase-lite-c/${version}/couchbase-lite-c-${variant}-${version}-${platformName}"
+        local file="${tmpDownloadFolder}/${platformName}"
+
+        wget --quiet --show-progress --output-document "${file}" "${url}"
+    }
+
+
+
+    for platform in "${!platforms[@]}"
+    do
+        echo "Downloading ${platform} package"
+
+        platformName=${platforms[$platform]}
+        download $platformName $variant
+    done
+
+    echoGreen "Downloading successful"
+
+    # ############## #
+    # Unzip packages #
+    # ############## #
+
+    echoGreen "Start unzipping"
+
+    tmpUnzipFolder="${tmpFolder}/${variant}/unzip"
+    mkdir $tmpUnzipFolder
+    echo "Temporary unzip directory ${tmpUnzipFolder}"
+
+    for platform in "${!platforms[@]}"
+    do
+        echo "Unzipping ${platform} package"
+
+        fileName=${platforms[$platform]}
+        zippedPath="$tmpDownloadFolder/$fileName"
+
+        unzipPlatformFolder="${tmpUnzipFolder}/$platform"
+        mkdir $unzipPlatformFolder
+
+        tar -x -f $zippedPath --directory $unzipPlatformFolder
+    done
+
+    echoGreen "Unzipping successful"
+
+    # ######################## #
+    # Package libcblite folder #
+    # ######################## #
+
+    echoGreen "Package libcblite"
+
+    tmpLibcbliteFolder="${tmpFolder}/libcblite_${variant}"
+    mkdir $tmpLibcbliteFolder
+    echo "Temporary libcblite directory ${tmpLibcbliteFolder}"
+
+    libFolder="${tmpLibcbliteFolder}/lib"
+    mkdir $libFolder
+
+    for platform in "${!platforms[@]}"
+    do
+        echo "Packaging ${platform}"
+
+        unzipPlatformFolder="${tmpUnzipFolder}/$platform"
+
+        case $platform in
+
+            linux)
+                platformFolder="${libFolder}/x86_64-unknown-linux-gnu"
+                mkdir $platformFolder
+
+                libFile="${unzipPlatformFolder}/libcblite-${version}/lib/x86_64-linux-gnu/libcblite.so.${version}"
+                libDestinationFile="${platformFolder}/libcblite.so.3"
+                cp $libFile $libDestinationFile
+
+                # There are required ICU libs already present in the existing package
+                cp $scriptDir/libcblite/lib/x86_64-unknown-linux-gnu/libicu* $platformFolder
+
+                ;;
+
+            windows)
+                platformFolder="${libFolder}/x86_64-pc-windows-gnu"
+                mkdir $platformFolder
+
+                libFile="${unzipPlatformFolder}/libcblite-${version}/lib/cblite.lib"
+                cp $libFile $platformFolder
+
+                binFile="${unzipPlatformFolder}/libcblite-${version}/bin/cblite.dll"
+                cp $binFile $platformFolder
+
+                ;;
+
+            macos)
+                platformFolder="${libFolder}/macos"
+                mkdir $platformFolder
+
+                libFile="${unzipPlatformFolder}/libcblite-${version}/lib/libcblite.${version}.dylib"
+                libDestinationFile="${platformFolder}/libcblite.3.dylib"
+                cp $libFile $libDestinationFile
+
+                ;;
+
+            android)
+                # aarch64
+                platformFolder="${libFolder}/aarch64-linux-android"
+                mkdir $platformFolder
+
+                libFile="${unzipPlatformFolder}/libcblite-${version}/lib/aarch64-linux-android/libcblite.so"
+                cp $libFile $platformFolder
+
+                # arm
+                platformFolder="${libFolder}/arm-linux-androideabi"
+                mkdir $platformFolder
+
+                libFile="${unzipPlatformFolder}/libcblite-${version}/lib/arm-linux-androideabi/libcblite.so"
+                cp $libFile $platformFolder
+
+                # i686
+                platformFolder="${libFolder}/i686-linux-android"
+                mkdir $platformFolder
+
+                libFile="${unzipPlatformFolder}/libcblite-${version}/lib/i686-linux-android/libcblite.so"
+                cp $libFile $platformFolder
+
+                # x86_64
+                platformFolder="${libFolder}/x86_64-linux-android"
+                mkdir $platformFolder
+
+                libFile="${unzipPlatformFolder}/libcblite-${version}/lib/x86_64-linux-android/libcblite.so"
+                cp $libFile $platformFolder
+
+                # Some files/directories must be moved only once for all platforms: include directory & LICENSE.txt
+                cp -R "${unzipPlatformFolder}/libcblite-${version}/include" $tmpLibcbliteFolder
+
+                cp "${unzipPlatformFolder}/libcblite-${version}/LICENSE.txt" $tmpLibcbliteFolder
+
+                ;;
+
+            ios)
+                platformFolder="${libFolder}/ios"
+                mkdir $platformFolder
+
+                cp -R "${unzipPlatformFolder}/CouchbaseLite.xcframework" $platformFolder
+
+                ;;
+        esac
+    done
+
+    echoGreen "Packaging libcblite successful"
+
+    # ######################## #
+    # Replace libcblite folder #
+    # ######################## #
+
+    echoGreen "Replace libcblite directory by newly package one"
+
+    rm -rf $scriptDir/libcblite_$variant
+
+    cp -R $tmpLibcbliteFolder $scriptDir
+
+    echoGreen "Replacing libcblite successful"
+
+    echoBlue "Finish variant $variant"
 done
-
-echoGreen "Downloading successful"
-
-# ############## #
-# Unzip packages #
-# ############## #
-
-echoGreen "Start unzipping"
-
-tmpUnzipFolder="${tmpFolder}/unzip"
-mkdir $tmpUnzipFolder
-echo "Temporary unzip directory ${tmpUnzipFolder}"
-
-for platform in "${!platforms[@]}"
-do
-    echo "Unzipping ${platform} package"
-
-    fileName=${platforms[$platform]}
-    zippedPath="$tmpDownloadFolder/$fileName"
-
-    unzipPlatformFolder="${tmpUnzipFolder}/$platform"
-    mkdir $unzipPlatformFolder
-
-    tar -x -f $zippedPath --directory $unzipPlatformFolder
-done
-
-echoGreen "Unzipping successful"
-
-# ######################## #
-# Package libcblite folder #
-# ######################## #
-
-echoGreen "Package libcblite"
-
-tmpLibcbliteFolder="${tmpFolder}/libcblite"
-mkdir $tmpLibcbliteFolder
-echo "Temporary libcblite directory ${tmpLibcbliteFolder}"
-
-libFolder="${tmpLibcbliteFolder}/lib"
-mkdir $libFolder
-
-for platform in "${!platforms[@]}"
-do
-    echo "Packaging ${platform}"
-
-    unzipPlatformFolder="${tmpUnzipFolder}/$platform"
-
-    case $platform in
-
-        linux)
-            platformFolder="${libFolder}/x86_64-unknown-linux-gnu"
-            mkdir $platformFolder
-
-            libFile="${unzipPlatformFolder}/libcblite-${version}/lib/x86_64-linux-gnu/libcblite.so.${version}"
-            libDestinationFile="${platformFolder}/libcblite.so.3"
-            cp $libFile $libDestinationFile
-
-            # There are required ICU libs already present in the existing package
-            cp $scriptDir/libcblite/lib/x86_64-unknown-linux-gnu/libicu* $platformFolder
-
-            ;;
-
-        windows)
-            platformFolder="${libFolder}/x86_64-pc-windows-gnu"
-            mkdir $platformFolder
-
-            libFile="${unzipPlatformFolder}/libcblite-${version}/lib/cblite.lib"
-            cp $libFile $platformFolder
-
-            binFile="${unzipPlatformFolder}/libcblite-${version}/bin/cblite.dll"
-            cp $binFile $platformFolder
-
-            ;;
-
-        macos)
-            platformFolder="${libFolder}/macos"
-            mkdir $platformFolder
-
-            libFile="${unzipPlatformFolder}/libcblite-${version}/lib/libcblite.${version}.dylib"
-            libDestinationFile="${platformFolder}/libcblite.3.dylib"
-            cp $libFile $libDestinationFile
-
-            ;;
-
-        android)
-            # aarch64
-            platformFolder="${libFolder}/aarch64-linux-android"
-            mkdir $platformFolder
-
-            libFile="${unzipPlatformFolder}/libcblite-${version}/lib/aarch64-linux-android/libcblite.so"
-            cp $libFile $platformFolder
-
-            # arm
-            platformFolder="${libFolder}/arm-linux-androideabi"
-            mkdir $platformFolder
-
-            libFile="${unzipPlatformFolder}/libcblite-${version}/lib/arm-linux-androideabi/libcblite.so"
-            cp $libFile $platformFolder
-
-            # i686
-            platformFolder="${libFolder}/i686-linux-android"
-            mkdir $platformFolder
-
-            libFile="${unzipPlatformFolder}/libcblite-${version}/lib/i686-linux-android/libcblite.so"
-            cp $libFile $platformFolder
-
-            # x86_64
-            platformFolder="${libFolder}/x86_64-linux-android"
-            mkdir $platformFolder
-
-            libFile="${unzipPlatformFolder}/libcblite-${version}/lib/x86_64-linux-android/libcblite.so"
-            cp $libFile $platformFolder
-
-            # Some files/directories must be moved only once for all platforms: include directory & LICENSE.txt
-            cp -R "${unzipPlatformFolder}/libcblite-${version}/include" $tmpLibcbliteFolder
-
-            cp "${unzipPlatformFolder}/libcblite-${version}/LICENSE.txt" $tmpLibcbliteFolder
-
-            ;;
-
-        ios)
-            platformFolder="${libFolder}/ios"
-            mkdir $platformFolder
-
-            cp -R "${unzipPlatformFolder}/CouchbaseLite.xcframework" $platformFolder
-
-            ;;
-    esac
-done
-
-echoGreen "Packaging libcblite successful"
-
-# ######################## #
-# Replace libcblite folder #
-# ######################## #
-
-echoGreen "Replace libcblite directory by newly package one"
-
-rm -rf $scriptDir/libcblite
-
-cp -R $tmpLibcbliteFolder $scriptDir
 
 rm -rf $tmpFolder
-
-echoGreen "Replacing libcblite successful"
 
 # ################### #
 # Strip the libraries #
