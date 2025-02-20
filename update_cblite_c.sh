@@ -2,6 +2,9 @@
 
 set -e
 
+# Uncomment this line to debug the scipt
+#set -x
+
 RED="\e[31m"
 GREEN="\e[32m"
 BLUE="\e[34m"
@@ -22,6 +25,8 @@ function echoBlue {
 scriptDir=$(dirname "$0")
 echo "Script directory: $scriptDir"
 echo
+
+cd $scriptDir
 
 # ####### #
 # Options #
@@ -91,7 +96,7 @@ do
 
     tmpDownloadFolder="${tmpFolder}/${variant}/download"
     mkdir $tmpDownloadFolder
-    echo "Temporary download directory ${tmpFolder}"
+    echo "Temporary download directory ${tmpDownloadFolder}"
 
     function download() {
         local platformName="$1"
@@ -146,7 +151,7 @@ do
     # Package libcblite folder #
     # ######################## #
 
-    echoGreen "Start packaging libcblite"
+    echoGreen "Start packaging libcblite_${variant}"
 
     tmpLibcbliteFolder="${tmpFolder}/libcblite_${variant}"
     mkdir $tmpLibcbliteFolder
@@ -172,7 +177,7 @@ do
                 cp $libFile $libDestinationFile
 
                 # There are required ICU libs already present in the existing package
-                cp $scriptDir/libcblite/lib/x86_64-unknown-linux-gnu/libicu* $platformFolder
+                cp libcblite_$variant/lib/x86_64-unknown-linux-gnu/libicu* $platformFolder
 
                 ;;
 
@@ -244,20 +249,31 @@ do
         esac
     done
 
-    echoGreen "Packaging libcblite successful"
+    echoGreen "Packaging libcblite_${variant} successful"
     echo
 
     # ######################## #
     # Replace libcblite folder #
     # ######################## #
 
-    echoGreen "Replace libcblite directory by newly packaged one"
+    echoGreen "Replace libcblite_${variant} directory by newly packaged one"
 
-    rm -rf $scriptDir/libcblite_$variant
+    rm -rf libcblite_$variant
 
-    cp -R $tmpLibcbliteFolder $scriptDir
+    cp -R $tmpLibcbliteFolder ./
 
-    echoGreen "Replacing libcblite successful"
+    echoGreen "Replacing libcblite_${variant} successful"
+    echo
+
+    # ################### #
+    # Strip the libraries #
+    # ################### #
+
+    echoGreen "Strip libraries"
+
+    DOCKER_BUILDKIT=1 docker build --file Dockerfile --build-arg DIRNAME=libcblite_$variant -t strip --output . .
+
+    echoGreen "Stripping libraries successful"
     echo
 
     echoBlue "End variant $variant"
@@ -265,17 +281,6 @@ do
 done
 
 rm -rf $tmpFolder
-
-# ################### #
-# Strip the libraries #
-# ################### #
-
-echoGreen "Strip libraries"
-
-DOCKER_BUILDKIT=1 docker build --file $scriptDir/Dockerfile -t strip --output $scriptDir/libcblite $scriptDir
-
-echoGreen "Stripping libcblite successful"
-echo
 
 echoGreen "All good :-)"
 echoGreen "Next steps: build OK, tests OK & create a pull request"
