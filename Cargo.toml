@@ -13,7 +13,7 @@ regex = "1.10.4"
 [dev-dependencies.cargo-husky]
 version = "1"
 default-features = false # Disable features which are enabled by default
-features = ["precommit-hook", "run-cargo-clippy", "run-cargo-fmt"]
+features = ["user-hooks"]
 
 [build-dependencies]
 bindgen = "0.69.4"
