@@ -16,20 +16,20 @@
 //
 
 use crate::{
-    CblRef, CouchbaseLiteError, Error, ErrorCode, Result, encryptable,
+    CblRef, CouchbaseLiteError, Error, ErrorCode, Result,
     slice::{from_bytes, from_str},
     c_api::{
         FLArray_AsMutable, FLArray_MutableCopy, FLDict_AsMutable, FLDict_MutableCopy,
         FLMutableArray, FLMutableArray_Append, FLMutableArray_Insert, FLMutableArray_IsChanged,
         FLMutableArray_New, FLMutableArray_Remove, FLMutableArray_Set, FLMutableDict,
         FLMutableDict_IsChanged, FLMutableDict_New, FLMutableDict_Remove, FLMutableDict_RemoveAll,
-        FLMutableDict_Set, FLSlot, FLSlot_SetBool, FLSlot_SetDouble, FLSlot_SetEncryptableValue,
-        FLSlot_SetInt, FLSlot_SetNull, FLSlot_SetString, FLSlot_SetValue, FLValue, FLValue_Release,
-        FLValue_Retain,
+        FLMutableDict_Set, FLSlot, FLSlot_SetBool, FLSlot_SetDouble, FLSlot_SetInt, FLSlot_SetNull,
+        FLSlot_SetString, FLSlot_SetValue, FLValue, FLValue_Release, FLValue_Retain,
     },
     fleece::{Array, ArrayIterator, Dict, DictIterator, DictKey, FleeceReference, Value},
-    encryptable::Encryptable,
 };
+#[cfg(feature = "enterprise")]
+use crate::{c_api::FLSlot_SetEncryptableValue, encryptable::Encryptable};
 
 use std::collections::HashMap;
 use std::fmt;
@@ -314,6 +314,7 @@ impl MutableDict {
             .collect::<HashMap<String, String>>()
     }
 
+    #[cfg(feature = "enterprise")]
     pub fn set_encryptable_value(dict: &Self, key: &str, encryptable: &Encryptable) {
         unsafe {
             FLSlot_SetEncryptableValue(
@@ -485,7 +486,8 @@ impl Slot<'_> {
         unsafe { FLSlot_SetValue(self.get_ref(), value._fleece_ref()) }
     }
 
-    pub fn put_encrypt(self, value: &encryptable::Encryptable) {
+    #[cfg(feature = "enterprise")]
+    pub fn put_encrypt(self, value: &Encryptable) {
         unsafe { FLSlot_SetEncryptableValue(self.get_ref(), value.get_ref()) }
     }
 }

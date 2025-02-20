@@ -17,8 +17,10 @@
 
 use crate::{
     CblRef,
-    c_api::{FLSlice, FLSlice_Copy, FLSliceResult, _FLBuf_Release, _FLBuf_Retain, FLData_Dump},
+    c_api::{FLSlice, FLSliceResult, _FLBuf_Release, _FLBuf_Retain, FLData_Dump},
 };
+#[cfg(feature = "enterprise")]
+use crate::c_api::FLSlice_Copy;
 
 use std::borrow::Cow;
 use std::ffi::{CStr, CString, c_void};
@@ -168,6 +170,7 @@ impl std::ops::Not for FLSlice {
 }
 
 impl FLSliceResult {
+    #[cfg(feature = "enterprise")]
     pub fn null() -> FLSliceResult {
         let s = FLSlice {
             buf: ptr::null(),

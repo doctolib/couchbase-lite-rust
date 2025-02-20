@@ -38,6 +38,7 @@ pub mod blob;
 pub mod collection;
 pub mod database;
 pub mod document;
+#[cfg(feature = "enterprise")]
 pub mod encryptable;
 pub mod error;
 pub mod fleece;

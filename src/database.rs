@@ -22,14 +22,13 @@ use crate::{
     c_api::{
         CBLDatabase, CBLDatabaseConfiguration, CBLDatabaseConfiguration_Default,
         CBLDatabase_AddChangeListener, CBLDatabase_BeginTransaction,
-        CBLDatabase_BufferNotifications, CBLDatabase_ChangeEncryptionKey, CBLDatabase_Close,
-        CBLDatabase_Count, CBLDatabase_Delete, CBLDatabase_EndTransaction, CBLDatabase_Name,
-        CBLDatabase_Open, CBLDatabase_Path, CBLDatabase_PerformMaintenance,
-        CBLDatabase_SendNotifications, CBLEncryptionKey, CBLError, CBL_DatabaseExists,
-        CBL_DeleteDatabase, CBLEncryptionKey_FromPassword, FLString, kCBLMaintenanceTypeCompact,
-        kCBLEncryptionAES256, kCBLEncryptionNone, kCBLMaintenanceTypeFullOptimize,
-        kCBLMaintenanceTypeIntegrityCheck, kCBLMaintenanceTypeOptimize, kCBLMaintenanceTypeReindex,
-        CBL_CopyDatabase, CBLDatabase_ScopeNames, CBLDatabase_CollectionNames, CBLDatabase_Scope,
+        CBLDatabase_BufferNotifications, CBLDatabase_Close, CBLDatabase_Count, CBLDatabase_Delete,
+        CBLDatabase_EndTransaction, CBLDatabase_Name, CBLDatabase_Open, CBLDatabase_Path,
+        CBLDatabase_PerformMaintenance, CBLDatabase_SendNotifications, CBLError,
+        CBL_DatabaseExists, CBL_DeleteDatabase, FLString, kCBLMaintenanceTypeCompact,
+        kCBLMaintenanceTypeFullOptimize, kCBLMaintenanceTypeIntegrityCheck,
+        kCBLMaintenanceTypeOptimize, kCBLMaintenanceTypeReindex, CBL_CopyDatabase,
+        CBLDatabase_ScopeNames, CBLDatabase_CollectionNames, CBLDatabase_Scope,
         CBLDatabase_Collection, CBLDatabase_CreateCollection, CBLDatabase_DeleteCollection,
         CBLDatabase_DefaultScope, CBLDatabase_DefaultCollection,
     },
@@ -38,9 +37,15 @@ use crate::{
     scope::Scope,
     MutableArray,
 };
+#[cfg(feature = "enterprise")]
+use crate::c_api::{
+    CBLDatabase_ChangeEncryptionKey, CBLEncryptionKey, CBLEncryptionKey_FromPassword,
+    kCBLEncryptionAES256, kCBLEncryptionNone,
+};
 use std::path::{Path, PathBuf};
 use std::ptr;
 
+#[cfg(feature = "enterprise")]
 enum_from_primitive! {
     /// Database encryption algorithms
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,10 +60,12 @@ pub const ENCRYPTION_KEY_SIZE_AES256: i64 = 32;
 
 /// Encryption key specified in a DatabaseConfiguration
 #[derive(Debug, Clone)]
+#[cfg(feature = "enterprise")]
 pub struct EncryptionKey {
     cbl_ref: Box<CBLEncryptionKey>,
 }
 
+#[cfg(feature = "enterprise")]
 impl EncryptionKey {
     /// Derives an encryption key from a password. If your UI uses passwords, call this function to
     /// create the key used to encrypt the database. It is designed for security, and deliberately
@@ -85,6 +92,7 @@ impl EncryptionKey {
     }
 }
 
+#[cfg(feature = "enterprise")]
 impl CblRef for EncryptionKey {
     type Output = *const CBLEncryptionKey;
     fn get_ref(&self) -> Self::Output {
@@ -96,6 +104,7 @@ impl CblRef for EncryptionKey {
 #[derive(Debug, Clone)]
 pub struct DatabaseConfiguration<'a> {
     pub directory: &'a std::path::Path,
+    #[cfg(feature = "enterprise")]
     pub encryption_key: Option<EncryptionKey>,
 }
 
@@ -192,6 +201,7 @@ impl Database {
             if let Some(cfg) = config {
                 let mut c_config: CBLDatabaseConfiguration = CBLDatabaseConfiguration_Default();
                 c_config.directory = from_str(cfg.directory.to_str().unwrap()).get_ref();
+                #[cfg(feature = "enterprise")]
                 if let Some(encryption_key) = cfg.encryption_key {
                     c_config.encryptionKey = *encryption_key.get_ref();
                 }
@@ -241,6 +251,7 @@ impl Database {
                 )
                 .get_ref();
 
+                #[cfg(feature = "enterprise")]
                 if let Some(encryption_key) = cfg.encryption_key {
                     c_config.encryptionKey = unsafe { *encryption_key.get_ref() };
                 }
@@ -337,6 +348,7 @@ impl Database {
     }
 
     /// Encrypts or decrypts a database, or changes its encryption key.
+    #[cfg(feature = "enterprise")]
     pub fn change_encryption_key(&mut self, encryption_key: &EncryptionKey) -> Result<()> {
         unsafe {
             check_bool(|error| {

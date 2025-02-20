@@ -24,27 +24,35 @@ use std::{
     time::Duration,
 };
 use crate::{
-    CblRef, CouchbaseLiteError, Database, Dict, Document, Error, ErrorCode, ListenerToken,
-    MutableDict, Result, check_error, release, retain,
-    slice::{from_str, from_bytes, self},
+    CblRef, Database, Dict, Document, Error, ListenerToken, MutableDict, Result, check_error,
+    release, retain,
+    slice::{from_str, self},
     c_api::{
         CBLListener_Remove, CBLAuth_CreatePassword, CBLAuth_CreateSession, CBLAuthenticator,
-        CBLDocument, CBLDocumentFlags, CBLEndpoint, CBLEndpoint_CreateWithLocalDB,
-        CBLEndpoint_CreateWithURL, CBLError, CBLProxySettings, CBLProxyType, CBLReplicatedDocument,
-        CBLReplicator, CBLReplicatorConfiguration, CBLReplicatorStatus, CBLReplicatorType,
+        CBLDocument, CBLDocumentFlags, CBLEndpoint, CBLEndpoint_CreateWithURL, CBLError,
+        CBLProxySettings, CBLProxyType, CBLReplicatedDocument, CBLReplicator,
+        CBLReplicatorConfiguration, CBLReplicatorStatus, CBLReplicatorType,
         CBLReplicator_AddChangeListener, CBLReplicator_AddDocumentReplicationListener,
         CBLReplicator_Create, CBLReplicator_IsDocumentPending, CBLReplicator_PendingDocumentIDs,
         CBLReplicator_SetHostReachable, CBLReplicator_SetSuspended, CBLReplicator_Start,
-        CBLReplicator_Status, CBLReplicator_Stop, FLDict, FLSlice, FLSliceResult,
-        FLSliceResult_New, FLSlice_Copy, FLString, FLStringResult, kCBLDocumentFlagsAccessRemoved,
+        CBLReplicator_Status, CBLReplicator_Stop, FLDict, FLString, kCBLDocumentFlagsAccessRemoved,
         kCBLDocumentFlagsDeleted, kCBLProxyHTTP, kCBLProxyHTTPS, kCBLReplicatorBusy,
         kCBLReplicatorConnecting, kCBLReplicatorIdle, kCBLReplicatorOffline, kCBLReplicatorStopped,
         kCBLReplicatorTypePull, kCBLReplicatorTypePush, kCBLReplicatorTypePushAndPull,
         CBLReplicator_IsDocumentPending2, CBLReplicator_PendingDocumentIDs2,
         CBLReplicationCollection,
     },
-    MutableArray, Listener, error,
+    MutableArray, Listener,
     collection::Collection,
+};
+#[cfg(feature = "enterprise")]
+use crate::{
+    CouchbaseLiteError, ErrorCode, error,
+    c_api::{
+        CBLEndpoint_CreateWithLocalDB, FLSlice, FLSliceResult, FLSliceResult_New, FLSlice_Copy,
+        FLStringResult,
+    },
+    slice::from_bytes,
 };
 
 // WARNING: THIS API IS UNIMPLEMENTED SO FAR
@@ -79,6 +87,7 @@ impl Endpoint {
         }
     }
 
+    #[cfg(feature = "enterprise")]
     pub fn new_with_local_db(db: &Database) -> Self {
         unsafe {
             Self {
@@ -326,6 +335,7 @@ pub enum EncryptionError {
         replicate with the kCBLErrorCrypto error. For security reason, the encryption
         cannot be skipped. */
 #[deprecated(note = "please use `CollectionPropertyEncryptor` on default collection instead")]
+#[cfg(feature = "enterprise")]
 pub type DefaultCollectionPropertyEncryptor = fn(
     document_id: Option<String>,
     properties: Dict,
@@ -336,6 +346,7 @@ pub type DefaultCollectionPropertyEncryptor = fn(
     error: &Error,
 ) -> std::result::Result<Vec<u8>, EncryptionError>;
 #[no_mangle]
+#[cfg(feature = "enterprise")]
 pub extern "C" fn c_default_collection_property_encryptor(
     context: *mut ::std::os::raw::c_void,
     document_id: FLString,
@@ -401,6 +412,7 @@ pub extern "C" fn c_default_collection_property_encryptor(
 \note   If a null result or an error is returned, the document will be failed to
         replicate with the kCBLErrorCrypto error. For security reason, the encryption
         cannot be skipped. */
+#[cfg(feature = "enterprise")]
 pub type CollectionPropertyEncryptor = fn(
     scope: Option<String>,
     collection: Option<String>,
@@ -413,6 +425,7 @@ pub type CollectionPropertyEncryptor = fn(
     error: &Error,
 ) -> std::result::Result<Vec<u8>, EncryptionError>;
 #[no_mangle]
+#[cfg(feature = "enterprise")]
 pub extern "C" fn c_collection_property_encryptor(
     context: *mut ::std::os::raw::c_void,
     scope: FLString,
@@ -483,6 +496,7 @@ pub extern "C" fn c_collection_property_encryptor(
         without an error is returned. If an error is returned, the document will be failed to replicate
         with the kCBLErrorCrypto error. */
 #[deprecated(note = "please use `CollectionPropertyDecryptor` on default collection instead")]
+#[cfg(feature = "enterprise")]
 pub type DefaultCollectionPropertyDecryptor = fn(
     document_id: Option<String>,
     properties: Dict,
@@ -493,6 +507,7 @@ pub type DefaultCollectionPropertyDecryptor = fn(
     error: &Error,
 ) -> std::result::Result<Vec<u8>, EncryptionError>;
 #[no_mangle]
+#[cfg(feature = "enterprise")]
 pub extern "C" fn c_default_collection_property_decryptor(
     context: *mut ::std::os::raw::c_void,
     document_id: FLString,
@@ -558,6 +573,7 @@ pub extern "C" fn c_default_collection_property_decryptor(
 \note   The decryption will be skipped (the encrypted data will be kept) when a null result
         without an error is returned. If an error is returned, the document will be failed to replicate
         with the kCBLErrorCrypto error. */
+#[cfg(feature = "enterprise")]
 pub type CollectionPropertyDecryptor = fn(
     scope: Option<String>,
     collection: Option<String>,
@@ -570,6 +586,7 @@ pub type CollectionPropertyDecryptor = fn(
     error: &Error,
 ) -> std::result::Result<Vec<u8>, EncryptionError>;
 #[no_mangle]
+#[cfg(feature = "enterprise")]
 pub extern "C" fn c_collection_property_decryptor(
     context: *mut ::std::os::raw::c_void,
     scope: FLString,
@@ -640,9 +657,13 @@ pub struct ReplicationConfigurationContext {
     pub push_filter: Option<ReplicationFilter>, // TODO: deprecated
     pub pull_filter: Option<ReplicationFilter>, // TODO: deprecated
     pub conflict_resolver: Option<ConflictResolver>, // TODO: deprecated
+    #[cfg(feature = "enterprise")]
     pub default_collection_property_encryptor: Option<DefaultCollectionPropertyEncryptor>, // TODO: deprecated
+    #[cfg(feature = "enterprise")]
     pub default_collection_property_decryptor: Option<DefaultCollectionPropertyDecryptor>, // TODO: deprecated
+    #[cfg(feature = "enterprise")]
     pub collection_property_encryptor: Option<CollectionPropertyEncryptor>,
+    #[cfg(feature = "enterprise")]
     pub collection_property_decryptor: Option<CollectionPropertyDecryptor>,
 }
 
@@ -805,18 +826,22 @@ impl Replicator {
                     .conflict_resolver
                     .as_ref()
                     .and(Some(c_replication_conflict_resolver)),
+                #[cfg(feature = "enterprise")]
                 propertyEncryptor: context
                     .default_collection_property_encryptor
                     .as_ref()
                     .and(Some(c_default_collection_property_encryptor)),
+                #[cfg(feature = "enterprise")]
                 propertyDecryptor: context
                     .default_collection_property_decryptor
                     .as_ref()
                     .and(Some(c_default_collection_property_decryptor)),
+                #[cfg(feature = "enterprise")]
                 documentPropertyEncryptor: context
                     .collection_property_encryptor
                     .as_ref()
                     .and(Some(c_collection_property_encryptor)),
+                #[cfg(feature = "enterprise")]
                 documentPropertyDecryptor: context
                     .collection_property_decryptor
                     .as_ref()
