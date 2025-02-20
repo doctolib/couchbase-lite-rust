@@ -14,4 +14,10 @@ jobs:
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: Clippy default
+          name: Clippy - community
+          args: --features=community
+      - uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: Clippy - enterprise
+          args: --features=enterprise

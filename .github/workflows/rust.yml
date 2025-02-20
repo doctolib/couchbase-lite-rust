@@ -24,9 +24,15 @@ jobs:
           toolchain: nightly
           components: rustfmt, clippy
     - uses: actions/checkout@v3
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests 
-      run: cargo test --verbose
-    - name: Run tests (with address sanitizer)
-      run: LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nightly test --verbose
+    - name: Build - community
+      run: cargo build --features=community --verbose
+    - name: Build - enterprise
+      run: cargo build --features=enterprise --verbose
+    - name: Run tests - community
+      run: cargo test --features=community --verbose
+    - name: Run tests - enterprise
+      run: cargo test --features=enterprise --verbose
+    - name: Run tests (with address sanitizer) - community
+      run: LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nightly test --features=community --verbose
+    - name: Run tests (with address sanitizer) - enterprise
+      run: LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nightly test --features=enterprise --verbose

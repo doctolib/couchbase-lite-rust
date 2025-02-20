@@ -21,6 +21,7 @@ function echoBlue {
 
 scriptDir=$(dirname "$0")
 echo "Script directory: $scriptDir"
+echo
 
 # ####### #
 # Options #
@@ -57,11 +58,13 @@ then
   help
   exit 1
 else
-  echoGreen "All good, let's start with CBlite $version :-)"
+  echoGreen "Let's start with CBlite $version :-)"
+  echo
 fi
 
 tmpFolder=$(mktemp -d)
 echo "Temporary directory ${tmpFolder}"
+echo
 
 declare -A platforms=(
     [linux]=linux-x86_64.tar.gz 
@@ -71,11 +74,14 @@ declare -A platforms=(
     [ios]=ios.zip
 )
 
-variants=("community", "enterprise")
+variants=("community" "enterprise")
 
-for variant in ${myArray[@]}; do
+for variant in ${variants[@]}
+do
     echoBlue "Start variant $variant"
+    echo
 
+    mkdir $tmpFolder/$variant
 
     # ################################## #
     # Download couchbase-lite-C packages #
@@ -108,6 +114,7 @@ for variant in ${myArray[@]}; do
     done
 
     echoGreen "Downloading successful"
+    echo
 
     # ############## #
     # Unzip packages #
@@ -133,12 +140,13 @@ for variant in ${myArray[@]}; do
     done
 
     echoGreen "Unzipping successful"
+    echo
 
     # ######################## #
     # Package libcblite folder #
     # ######################## #
 
-    echoGreen "Package libcblite"
+    echoGreen "Start packaging libcblite"
 
     tmpLibcbliteFolder="${tmpFolder}/libcblite_${variant}"
     mkdir $tmpLibcbliteFolder
@@ -237,20 +245,23 @@ for variant in ${myArray[@]}; do
     done
 
     echoGreen "Packaging libcblite successful"
+    echo
 
     # ######################## #
     # Replace libcblite folder #
     # ######################## #
 
-    echoGreen "Replace libcblite directory by newly package one"
+    echoGreen "Replace libcblite directory by newly packaged one"
 
     rm -rf $scriptDir/libcblite_$variant
 
     cp -R $tmpLibcbliteFolder $scriptDir
 
     echoGreen "Replacing libcblite successful"
+    echo
 
-    echoBlue "Finish variant $variant"
+    echoBlue "End variant $variant"
+    echo
 done
 
 rm -rf $tmpFolder
@@ -264,3 +275,7 @@ echoGreen "Strip libraries"
 DOCKER_BUILDKIT=1 docker build --file $scriptDir/Dockerfile -t strip --output $scriptDir/libcblite $scriptDir
 
 echoGreen "Stripping libcblite successful"
+echo
+
+echoGreen "All good :-)"
+echoGreen "Next steps: build OK, tests OK & create a pull request"
