@@ -1,7 +1,7 @@
 [package]
 name = "couchbase_lite"
-version = "3.2.1-0"
 # The first three numbers correspond to the Couchbase Lite C release, the fourth number corresponds to the Doctolib release
+version = "3.2.1-0"
 edition = "2021"
 
 [dependencies]
