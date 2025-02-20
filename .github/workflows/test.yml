@@ -21,6 +21,7 @@ jobs:
         with:
             toolchain: nightly
             components: rustfmt, clippy
+      - uses: actions/checkout@v3
       - name: Run tests
         run: cargo test --features=${{ matrix.version }} --verbose
       - name: Run tests (with address sanitizer)
