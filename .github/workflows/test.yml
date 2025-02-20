@@ -25,4 +25,4 @@ jobs:
       - name: Run tests
         run: cargo test --features=${{ matrix.version }} --verbose
       - name: Run tests (with address sanitizer)
-        run: LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nightly test --features=--features=${{ matrix.version }} --verbose
+        run: LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nightly test --features=${{ matrix.version }} --verbose
