@@ -1,0 +1,21 @@
+name: Build
+
+on:
+  push
+
+env:
+  CARGO_TERM_COLOR: always
+  LIBCLANG_PATH: /usr/lib/llvm-14/lib/
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        version: [community, enterprise]
+    steps:
+      - name: Install apt-get
+        run: sudo apt-get install -y clang llvm
+      - uses: actions/checkout@v3
+      - name: Build
+        run: cargo build --features=${{ matrix.version }} --verbose

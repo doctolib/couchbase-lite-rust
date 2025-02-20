@@ -9,16 +9,14 @@ env:
 jobs:
   clippy_check:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: [community, enterprise]
     steps:
       - uses: actions/checkout@v1
       - run: rustup component add clippy
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: Clippy - community
-          args: --features=community
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          name: Clippy - enterprise
-          args: --features=enterprise
+          name: Clippy
+          args: --features=${{ matrix.version }}

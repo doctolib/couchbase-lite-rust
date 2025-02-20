@@ -1,0 +1,27 @@
+name: Test
+
+on:
+  push
+
+env:
+  CARGO_TERM_COLOR: always
+  LIBCLANG_PATH: /usr/lib/llvm-14/lib/
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        version: [community, enterprise]
+    steps:
+      - name: Install apt-get
+        run: sudo apt-get install -y clang llvm
+      - name: Install latest nightly
+        uses: dtolnay/rust-toolchain@v1
+        with:
+            toolchain: nightly
+            components: rustfmt, clippy
+      - name: Run tests
+        run: cargo test --features=${{ matrix.version }} --verbose
+      - name: Run tests (with address sanitizer)
+        run: LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nightly test --features=--features=${{ matrix.version }} --verbose
