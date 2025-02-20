@@ -63,7 +63,7 @@ then
   help
   exit 1
 else
-  echoGreen "Let's start with CBlite $version :-)"
+  echoGreen "Let's start updating to CBlite $version :-)"
   echo
 fi
 
