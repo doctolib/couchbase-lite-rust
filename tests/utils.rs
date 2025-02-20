@@ -5,10 +5,11 @@ use self::couchbase_lite::*;
 use self::tempdir::TempDir;
 
 use std::{
-    collections::HashMap,
     sync::{Arc, Mutex, MutexGuard},
     thread, time,
 };
+#[cfg(feature = "enterprise")]
+use std::collections::HashMap;
 
 // Enables check for leaks of native CBL objects after `with_db()` finishes.
 // WARNING: These checks only work if one test method runs at a time, i.e. testing is single
@@ -46,6 +47,7 @@ where
     let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
     let cfg = DatabaseConfiguration {
         directory: tmp_dir.path(),
+        #[cfg(feature = "enterprise")]
         encryption_key: None,
     };
     let mut db = Database::open(DB_NAME, Some(cfg)).expect("open db");
@@ -90,6 +92,7 @@ impl Default for ReplicationTestConfiguration {
     }
 }
 
+#[cfg(feature = "enterprise")]
 fn generate_replication_configuration(
     local_db: &Database,
     central_db: &Database,
@@ -116,6 +119,7 @@ fn generate_replication_configuration(
     }
 }
 
+#[cfg(feature = "enterprise")]
 pub struct ReplicationTwoDbsTester {
     _tmp_dir: TempDir,
     pub local_database: Database,
@@ -124,6 +128,7 @@ pub struct ReplicationTwoDbsTester {
     replicator_continuous: bool,
 }
 
+#[cfg(feature = "enterprise")]
 impl ReplicationTwoDbsTester {
     pub fn new(
         replication_configuration: ReplicationTestConfiguration,
@@ -227,6 +232,7 @@ impl ReplicationTwoDbsTester {
     }
 }
 
+#[cfg(feature = "enterprise")]
 impl Drop for ReplicationTwoDbsTester {
     fn drop(&mut self) {
         self.stop_replicator();
@@ -236,6 +242,7 @@ impl Drop for ReplicationTwoDbsTester {
     }
 }
 
+#[cfg(feature = "enterprise")]
 pub struct ReplicationThreeDbsTester {
     _tmp_dir: TempDir,
     local_database_1: Database,
@@ -247,6 +254,7 @@ pub struct ReplicationThreeDbsTester {
     replicator_2_continuous: bool,
 }
 
+#[cfg(feature = "enterprise")]
 impl ReplicationThreeDbsTester {
     pub fn new(
         replication_configuration_1: ReplicationTestConfiguration,
@@ -408,6 +416,7 @@ impl ReplicationThreeDbsTester {
     }
 }
 
+#[cfg(feature = "enterprise")]
 impl Drop for ReplicationThreeDbsTester {
     fn drop(&mut self) {
         self.stop_replicators();
