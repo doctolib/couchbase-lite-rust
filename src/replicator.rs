@@ -259,9 +259,7 @@ unsafe extern "C" fn c_replication_push_filter(
     (*repl_conf_context)
         .push_filter
         .as_ref()
-        .map_or(false, |callback| {
-            callback(&document, is_deleted, is_access_removed)
-        })
+        .is_some_and(|callback| callback(&document, is_deleted, is_access_removed))
 }
 unsafe extern "C" fn c_replication_pull_filter(
     context: *mut ::std::os::raw::c_void,
@@ -275,9 +273,7 @@ unsafe extern "C" fn c_replication_pull_filter(
     (*repl_conf_context)
         .pull_filter
         .as_ref()
-        .map_or(false, |callback| {
-            callback(&document, is_deleted, is_access_removed)
-        })
+        .is_some_and(|callback| callback(&document, is_deleted, is_access_removed))
 }
 fn read_document_flags(flags: CBLDocumentFlags) -> (bool, bool) {
     (flags & DELETED != 0, flags & ACCESS_REMOVED != 0)
