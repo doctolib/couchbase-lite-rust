@@ -17,8 +17,11 @@
 
 extern crate couchbase_lite;
 
+#[cfg(feature = "enterprise")]
 use self::couchbase_lite::*;
+#[cfg(feature = "enterprise")]
 use encryptable::Encryptable;
+#[cfg(feature = "enterprise")]
 use std::{time::Duration, thread};
 
 pub mod utils;
@@ -26,6 +29,7 @@ pub mod utils;
 //////// TESTS:
 
 #[test]
+#[cfg(feature = "enterprise")]
 fn push_replication() {
     let mut tester = utils::ReplicationTwoDbsTester::new(
         utils::ReplicationTestConfiguration::default(),
@@ -45,6 +49,7 @@ fn push_replication() {
 }
 
 #[test]
+#[cfg(feature = "enterprise")]
 fn pull_replication() {
     let mut tester = utils::ReplicationTwoDbsTester::new(
         utils::ReplicationTestConfiguration::default(),
@@ -64,6 +69,7 @@ fn pull_replication() {
 }
 
 #[test]
+#[cfg(feature = "enterprise")]
 fn push_pull_replication() {
     let mut tester = utils::ReplicationThreeDbsTester::new(
         utils::ReplicationTestConfiguration::default(),
@@ -91,6 +97,7 @@ fn push_pull_replication() {
 }
 
 #[test]
+#[cfg(feature = "enterprise")]
 fn pull_type_not_pushing() {
     let config = utils::ReplicationTestConfiguration {
         replicator_type: ReplicatorType::Pull,
@@ -115,6 +122,7 @@ fn pull_type_not_pushing() {
 }
 
 #[test]
+#[cfg(feature = "enterprise")]
 fn push_type_not_pulling() {
     let config = utils::ReplicationTestConfiguration {
         replicator_type: ReplicatorType::Push,
@@ -139,6 +147,7 @@ fn push_type_not_pulling() {
 }
 
 #[test]
+#[cfg(feature = "enterprise")]
 fn document_ids() {
     let mut document_ids = MutableArray::new();
     document_ids.append().put_string("foo");
@@ -172,6 +181,7 @@ fn document_ids() {
 }
 
 #[test]
+#[cfg(feature = "enterprise")]
 fn push_and_pull_filter() {
     let context1 = ReplicationConfigurationContext {
         push_filter: Some(Box::new(|document, _is_deleted, _is_access_removed| {
@@ -227,6 +237,7 @@ fn push_and_pull_filter() {
 }
 
 #[test]
+#[cfg(feature = "enterprise")]
 fn conflict_resolver() {
     let (sender, receiver) = std::sync::mpsc::channel();
 
@@ -316,6 +327,7 @@ fn conflict_resolver() {
 }
 
 #[test]
+#[cfg(feature = "enterprise")]
 fn conflict_resolver_save_keep_local() {
     let mut tester = utils::ReplicationTwoDbsTester::new(
         utils::ReplicationTestConfiguration::default(),
@@ -397,6 +409,7 @@ fn conflict_resolver_save_keep_local() {
 }
 
 #[test]
+#[cfg(feature = "enterprise")]
 fn conflict_resolver_save_keep_remote() {
     let mut tester = utils::ReplicationTwoDbsTester::new(
         utils::ReplicationTestConfiguration::default(),
@@ -479,6 +492,7 @@ fn conflict_resolver_save_keep_remote() {
 
 // Encryption/Decryption
 
+#[cfg(feature = "enterprise")]
 fn encryptor(
     _document_id: Option<String>,
     _properties: Dict,
@@ -490,6 +504,7 @@ fn encryptor(
 ) -> std::result::Result<Vec<u8>, EncryptionError> {
     Ok(input.iter().map(|u| u ^ 48).collect())
 }
+#[cfg(feature = "enterprise")]
 fn decryptor(
     _document_id: Option<String>,
     _properties: Dict,
@@ -501,6 +516,7 @@ fn decryptor(
 ) -> std::result::Result<Vec<u8>, EncryptionError> {
     Ok(input.iter().map(|u| u ^ 48).collect())
 }
+#[cfg(feature = "enterprise")]
 fn encryptor_err_temporary(
     _document_id: Option<String>,
     _properties: Dict,
@@ -512,6 +528,7 @@ fn encryptor_err_temporary(
 ) -> std::result::Result<Vec<u8>, EncryptionError> {
     Err(EncryptionError::Temporary)
 }
+#[cfg(feature = "enterprise")]
 fn decryptor_err_temporary(
     _document_id: Option<String>,
     _properties: Dict,
@@ -523,6 +540,7 @@ fn decryptor_err_temporary(
 ) -> std::result::Result<Vec<u8>, EncryptionError> {
     Err(EncryptionError::Temporary)
 }
+#[cfg(feature = "enterprise")]
 fn encryptor_err_permanent(
     _document_id: Option<String>,
     _properties: Dict,
@@ -534,6 +552,7 @@ fn encryptor_err_permanent(
 ) -> std::result::Result<Vec<u8>, EncryptionError> {
     Err(EncryptionError::Permanent)
 }
+#[cfg(feature = "enterprise")]
 fn decryptor_err_permanent(
     _document_id: Option<String>,
     _properties: Dict,
@@ -547,6 +566,7 @@ fn decryptor_err_permanent(
 }
 
 #[test]
+#[cfg(feature = "enterprise")]
 fn encryption_ok_decryption_ok() {
     let context1 = ReplicationConfigurationContext {
         default_collection_property_encryptor: Some(encryptor),
@@ -612,6 +632,7 @@ fn encryption_ok_decryption_ok() {
 }
 
 #[test]
+#[cfg(feature = "enterprise")]
 fn encryption_error_temporary() {
     let config = utils::ReplicationTestConfiguration {
         continuous: false,
@@ -674,6 +695,7 @@ fn encryption_error_temporary() {
 }
 
 #[test]
+#[cfg(feature = "enterprise")]
 fn decryption_error_temporary() {
     let config = utils::ReplicationTestConfiguration {
         continuous: false,
@@ -736,6 +758,7 @@ fn decryption_error_temporary() {
 }
 
 #[test]
+#[cfg(feature = "enterprise")]
 fn encryption_error_permanent() {
     let config = utils::ReplicationTestConfiguration {
         continuous: false,
@@ -818,6 +841,7 @@ fn encryption_error_permanent() {
 }
 
 #[test]
+#[cfg(feature = "enterprise")]
 fn decryption_error_permanent() {
     let config = utils::ReplicationTestConfiguration {
         continuous: false,
@@ -904,6 +928,7 @@ mod unsafe_test {
     use super::*;
 
     #[test]
+    #[cfg(feature = "enterprise")]
     fn continuous() {
         let config = utils::ReplicationTestConfiguration {
             continuous: false,

@@ -1,5 +1,6 @@
-on: push
 name: Clippy check
+
+on: push
 
 env:
   CARGO_TERM_COLOR: always
@@ -8,10 +9,14 @@ env:
 jobs:
   clippy_check:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: [community, enterprise]
     steps:
       - uses: actions/checkout@v1
       - run: rustup component add clippy
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: Clippy default
+          name: Clippy
+          args: --features=${{ matrix.version }}

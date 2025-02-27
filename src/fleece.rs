@@ -20,19 +20,23 @@ use crate::{
     slice::{NULL_SLICE, from_bytes, from_str},
     error::{Error, Result},
     c_api::{
-        CBLEncryptable, FLArray, FLArrayIterator, FLArrayIterator_Begin, FLArrayIterator_GetCount,
+        FLArray, FLArrayIterator, FLArrayIterator_Begin, FLArrayIterator_GetCount,
         FLArrayIterator_GetValue, FLArrayIterator_GetValueAt, FLArrayIterator_Next, FLArray_Count,
         FLArray_Get, FLArray_IsEmpty, FLDict, FLDictIterator, FLDictIterator_Begin,
         FLDictIterator_GetCount, FLDictIterator_GetKeyString, FLDictIterator_GetValue,
         FLDictIterator_Next, FLDictKey, FLDictKey_GetString, FLDictKey_Init, FLDict_Count,
-        FLDict_Get, FLDict_GetEncryptableValue, FLDict_GetWithKey, FLDict_IsBlob, FLDict_IsEmpty,
-        FLDict_IsEncryptableValue, FLDoc, FLDoc_FromJSON, FLDoc_FromResultData, FLDoc_GetData,
-        FLDoc_GetRoot, FLDoc_Release, FLDoc_Retain, FLError, FLError_kFLInvalidData, FLSlice_Copy,
-        FLValue, FLValue_AsArray, FLValue_AsBool, FLValue_AsData, FLValue_AsDict, FLValue_AsDouble,
-        FLValue_AsFloat, FLValue_AsInt, FLValue_AsString, FLValue_AsTimestamp, FLValue_AsUnsigned,
-        FLValue_GetType, FLValue_IsEqual, FLValue_IsInteger, FLValue_IsUnsigned, FLValue_IsDouble,
+        FLDict_Get, FLDict_GetWithKey, FLDict_IsBlob, FLDict_IsEmpty, FLDoc, FLDoc_FromJSON,
+        FLDoc_FromResultData, FLDoc_GetData, FLDoc_GetRoot, FLDoc_Release, FLDoc_Retain, FLError,
+        FLError_kFLInvalidData, FLSlice_Copy, FLValue, FLValue_AsArray, FLValue_AsBool,
+        FLValue_AsData, FLValue_AsDict, FLValue_AsDouble, FLValue_AsFloat, FLValue_AsInt,
+        FLValue_AsString, FLValue_AsTimestamp, FLValue_AsUnsigned, FLValue_GetType,
+        FLValue_IsEqual, FLValue_IsInteger, FLValue_IsUnsigned, FLValue_IsDouble,
         FLValue_IsMutable, FLValue_ToJSON, _FLValue, FLValue_FindDoc, FLDictIterator_End,
     },
+};
+#[cfg(feature = "enterprise")]
+use crate::{
+    c_api::{CBLEncryptable, FLDict_GetEncryptableValue, FLDict_IsEncryptableValue},
     encryptable::Encryptable,
 };
 
@@ -224,6 +228,7 @@ impl Value {
         unsafe { FLValue_IsMutable(self.get_ref()) }
     }
 
+    #[cfg(feature = "enterprise")]
     pub fn is_encryptable(&self) -> bool {
         unsafe { FLDict_IsEncryptableValue(FLValue_AsDict(self.get_ref())) }
     }
@@ -314,6 +319,7 @@ impl Value {
         }
     }
 
+    #[cfg(feature = "enterprise")]
     pub fn get_encryptable_value(&self) -> Encryptable {
         unsafe {
             let encryptable = FLDict_GetEncryptableValue(FLValue_AsDict(self.get_ref()));
@@ -567,6 +573,7 @@ impl Dict {
         unsafe { FLDict_IsEmpty(self.get_ref()) }
     }
 
+    #[cfg(feature = "enterprise")]
     pub fn is_encryptable(&self) -> bool {
         unsafe { FLDict_IsEncryptableValue(self.get_ref()) }
     }
@@ -587,6 +594,7 @@ impl Dict {
         }
     }
 
+    #[cfg(feature = "enterprise")]
     pub fn get_encryptable_value(&self) -> Encryptable {
         unsafe {
             let encryptable = FLDict_GetEncryptableValue(self.get_ref());

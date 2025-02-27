@@ -234,6 +234,7 @@ fn database_add_document_change_listener() {
 }
 
 #[test]
+#[cfg(feature = "enterprise")]
 fn database_delete_document() {
     let (sender, receiver) = std::sync::mpsc::channel();
 

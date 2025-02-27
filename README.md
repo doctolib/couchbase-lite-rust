@@ -20,8 +20,14 @@ Installation instructions are [here][BINDGEN_INSTALL].
 
 ### 2. Build!
 
+You can use Couchbase Lite C community or entreprise editions:
+
 ```shell
-$ cargo build
+$ cargo build --features=enterprise
+```
+
+```shell
+$ cargo build --features=community
 ```
 
 ## Maintaining
@@ -66,12 +72,6 @@ $ LEAK_CHECK=y cargo test -- --test-threads 1
 
 ```shell
 $ LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nightly test 
-```
-
-**To diag flaky test**
-
-```shell
-$ LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nightly test --verbose --features=flaky-test flaky
 ```
 
 ## Learning

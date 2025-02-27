@@ -27,6 +27,7 @@ fn main() {
     let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
     let cfg = DatabaseConfiguration {
         directory: tmp_dir.path(),
+        #[cfg(feature = "enterprise")]
         encryption_key: None,
     };
     let mut db = Database::open("main_db", Some(cfg)).expect("open db");

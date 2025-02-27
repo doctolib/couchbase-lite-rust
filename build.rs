@@ -22,6 +22,11 @@
 // - https://rust-lang.github.io/rust-bindgen/tutorial-3.html
 // - https://doc.rust-lang.org/cargo/reference/build-scripts.html
 
+#[cfg(all(not(feature = "community"), not(feature = "enterprise")))]
+compile_error!("You need to have one the following features activated: community, enterprise");
+#[cfg(all(feature = "community", feature = "enterprise"))]
+compile_error!("You need to have one the following features activated: community, enterprise");
+
 extern crate bindgen;
 extern crate fs_extra;
 
@@ -32,8 +37,15 @@ use std::path::PathBuf;
 use std::process::Command;
 use fs_extra::dir;
 
-static CBL_INCLUDE_DIR: &str = "libcblite/include";
-static CBL_LIB_DIR: &str = "libcblite/lib";
+#[cfg(feature = "community")]
+static CBL_INCLUDE_DIR: &str = "libcblite_community/include";
+#[cfg(feature = "enterprise")]
+static CBL_INCLUDE_DIR: &str = "libcblite_enterprise/include";
+
+#[cfg(feature = "community")]
+static CBL_LIB_DIR: &str = "libcblite_community/lib";
+#[cfg(feature = "enterprise")]
+static CBL_LIB_DIR: &str = "libcblite_enterprise/lib";
 
 fn main() -> Result<(), Box<dyn Error>> {
     generate_bindings()?;

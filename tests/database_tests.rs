@@ -48,6 +48,7 @@ fn delete_file() {
     let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
     let cfg = DatabaseConfiguration {
         directory: tmp_dir.path(),
+        #[cfg(feature = "enterprise")]
         encryption_key: None,
     };
     if let Err(_) = Database::open(DB_NAME, Some(cfg)) {
@@ -70,6 +71,7 @@ fn copy_file() {
     let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
     let cfg = DatabaseConfiguration {
         directory: tmp_dir.path(),
+        #[cfg(feature = "enterprise")]
         encryption_key: None,
     };
     match Database::open(DB_NAME, Some(cfg.clone())) {
@@ -143,16 +145,19 @@ fn db_properties() {
 }
 
 #[test]
+#[cfg(feature = "enterprise")]
 fn db_encryption_key() {
     let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
     let cfg_no_encryption = DatabaseConfiguration {
         directory: tmp_dir.path(),
+        #[cfg(feature = "enterprise")]
         encryption_key: None,
     };
     let encryption_key =
         EncryptionKey::new_from_password(EncryptionAlgorithm::None, "password1").unwrap();
     let cfg_encryption1 = DatabaseConfiguration {
         directory: tmp_dir.path(),
+        #[cfg(feature = "enterprise")]
         encryption_key: Some(encryption_key.clone()),
     };
 
