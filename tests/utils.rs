@@ -43,7 +43,7 @@ where
 {
     init_logging();
 
-    let start_inst_count = instance_count() as isize;
+    let start_inst_count = instance_count();
     let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
     let cfg = DatabaseConfiguration {
         directory: tmp_dir.path(),
@@ -58,11 +58,11 @@ where
     db.delete().unwrap();
 
     if LEAK_CHECK.is_some() {
-        warn!("Couchbase Lite objects were leaked by this test");
+        info!("Checking if Couchbase Lite objects were leaked by this test");
         dump_instances();
         assert_eq!(
-            instance_count() as usize,
-            start_inst_count as usize,
+            instance_count(),
+            start_inst_count,
             "Native object leak: {} objects, was {}",
             instance_count(),
             start_inst_count
