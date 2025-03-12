@@ -21,15 +21,15 @@ impl Scope {
 
     //////// CONSTRUCTORS:
 
-    /// Takes ownership of the object and increase it's reference counter.
-    pub(crate) fn retain(cbl_ref: *mut CBLScope) -> Self {
+    /// Increase the reference counter of the CBL ref, so dropping the instance will NOT free the ref.
+    pub(crate) fn reference(cbl_ref: *mut CBLScope) -> Self {
         Self {
             cbl_ref: unsafe { retain(cbl_ref) },
         }
     }
 
-    /// References the object without taking ownership and increasing it's reference counter
-    pub(crate) const fn wrap(cbl_ref: *mut CBLScope) -> Self {
+    /// Takes ownership of the CBL ref, the reference counter is not increased so dropping the instance will free the ref.
+    pub(crate) const fn take_ownership(cbl_ref: *mut CBLScope) -> Self {
         Self { cbl_ref }
     }
 
@@ -44,7 +44,7 @@ impl Scope {
 
     /** Returns the scope's database */
     pub fn database(&self) -> Database {
-        unsafe { Database::retain(CBLScope_Database(self.get_ref())) }
+        unsafe { Database::reference(CBLScope_Database(self.get_ref())) }
     }
 
     /** Returns the names of all collections in the scope. */
@@ -71,7 +71,7 @@ impl Scope {
             if collection.is_null() {
                 None
             } else {
-                Some(Collection::wrap(collection))
+                Some(Collection::take_ownership(collection))
             }
         })
     }
@@ -92,6 +92,6 @@ impl Drop for Scope {
 
 impl Clone for Scope {
     fn clone(&self) -> Self {
-        Self::retain(self.get_ref())
+        Self::reference(self.get_ref())
     }
 }

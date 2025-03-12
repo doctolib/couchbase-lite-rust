@@ -56,15 +56,15 @@ impl Collection {
 
     //////// CONSTRUCTORS:
 
-    /// Takes ownership of the object and increase it's reference counter.
-    pub(crate) fn retain(cbl_ref: *mut CBLCollection) -> Self {
+    /// Increase the reference counter of the CBL ref, so dropping the instance will NOT free the ref.
+    pub(crate) fn reference(cbl_ref: *mut CBLCollection) -> Self {
         Self {
             cbl_ref: unsafe { retain(cbl_ref) },
         }
     }
 
-    /// References the object without taking ownership and increasing it's reference counter
-    pub(crate) const fn wrap(cbl_ref: *mut CBLCollection) -> Self {
+    /// Takes ownership of the CBL ref, the reference counter is not increased so dropping the instance will free the ref.
+    pub(crate) const fn take_ownership(cbl_ref: *mut CBLCollection) -> Self {
         Self { cbl_ref }
     }
 
@@ -72,7 +72,7 @@ impl Collection {
 
     /// Returns the scope of the collection.
     pub fn scope(&self) -> Scope {
-        unsafe { Scope::wrap(CBLCollection_Scope(self.get_ref())) }
+        unsafe { Scope::take_ownership(CBLCollection_Scope(self.get_ref())) }
     }
 
     /// Returns the collection name.
@@ -95,7 +95,7 @@ impl Collection {
 
     /// Returns the collection's database.
     pub fn database(&self) -> Database {
-        unsafe { Database::retain(CBLCollection_Database(self.get_ref())) }
+        unsafe { Database::reference(CBLCollection_Database(self.get_ref())) }
     }
 
     /// Returns the number of documents in the collection.
@@ -141,7 +141,7 @@ impl Drop for Collection {
 
 impl Clone for Collection {
     fn clone(&self) -> Self {
-        Self::retain(self.get_ref())
+        Self::reference(self.get_ref())
     }
 }
 
@@ -155,7 +155,7 @@ unsafe extern "C" fn c_collection_change_listener(
 ) {
     let callback = context as *const CollectionChangeListener;
     if let Some(change) = change.as_ref() {
-        let collection = Collection::retain(change.collection as *mut CBLCollection);
+        let collection = Collection::reference(change.collection as *mut CBLCollection);
         let doc_ids = std::slice::from_raw_parts(change.docIDs, change.numDocs as usize)
             .iter()
             .filter_map(|doc_id| doc_id.to_string())

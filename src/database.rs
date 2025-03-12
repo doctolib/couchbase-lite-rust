@@ -140,7 +140,7 @@ unsafe extern "C" fn c_database_change_listener(
     c_doc_ids: *mut FLString,
 ) {
     let callback = context as *const DatabaseChangeListener;
-    let database = Database::retain(db as *mut CBLDatabase);
+    let database = Database::reference(db as *mut CBLDatabase);
 
     let doc_ids = std::slice::from_raw_parts(c_doc_ids, num_docs as usize)
         .iter()
@@ -159,7 +159,7 @@ unsafe extern "C" fn c_database_buffer_notifications(
 ) {
     let callback: BufferNotifications = std::mem::transmute(context);
 
-    let database = Database::retain(db.cast::<CBLDatabase>());
+    let database = Database::reference(db.cast::<CBLDatabase>());
 
     callback(&database);
 }
@@ -180,15 +180,15 @@ impl CblRef for Database {
 impl Database {
     //////// CONSTRUCTORS:
 
-    /// Takes ownership of the object and increase it's reference counter.
-    pub(crate) fn retain(cbl_ref: *mut CBLDatabase) -> Self {
+    /// Increase the reference counter of the CBL ref, so dropping the instance will NOT free the ref.
+    pub(crate) fn reference(cbl_ref: *mut CBLDatabase) -> Self {
         Self {
             cbl_ref: unsafe { retain(cbl_ref) },
         }
     }
 
-    /// References the object without taking ownership and increasing it's reference counter
-    pub(crate) const fn wrap(cbl_ref: *mut CBLDatabase) -> Self {
+    /// Takes ownership of the CBL ref, the reference counter is not increased so dropping the instance will free the ref.
+    pub(crate) const fn take_ownership(cbl_ref: *mut CBLDatabase) -> Self {
         Self { cbl_ref }
     }
 
@@ -217,7 +217,7 @@ impl Database {
         if db_ref.is_null() {
             return failure(err);
         }
-        Ok(Self::wrap(db_ref))
+        Ok(Self::take_ownership(db_ref))
     }
 
     //////// OTHER STATIC METHODS:
@@ -418,7 +418,7 @@ impl Database {
             if scope.is_null() {
                 None
             } else {
-                Some(Scope::wrap(scope))
+                Some(Scope::take_ownership(scope))
             }
         })
     }
@@ -445,7 +445,7 @@ impl Database {
             if collection.is_null() {
                 None
             } else {
-                Some(Collection::wrap(collection))
+                Some(Collection::take_ownership(collection))
             }
         })
     }
@@ -474,7 +474,7 @@ impl Database {
             )
         };
 
-        check_error(&error).map(|()| Collection::wrap(collection))
+        check_error(&error).map(|()| Collection::take_ownership(collection))
     }
 
     /// Delete an existing collection.
@@ -499,7 +499,7 @@ impl Database {
         let mut error = CBLError::default();
         let scope = unsafe { CBLDatabase_DefaultScope(self.get_ref(), &mut error) };
 
-        check_error(&error).map(|()| Scope::wrap(scope))
+        check_error(&error).map(|()| Scope::take_ownership(scope))
     }
 
     /// Returns the default collection.
@@ -511,7 +511,7 @@ impl Database {
             if collection.is_null() {
                 None
             } else {
-                Some(Collection::wrap(collection))
+                Some(Collection::take_ownership(collection))
             }
         })
     }
@@ -526,7 +526,7 @@ impl Database {
         if collection.is_null() {
             Err(Error::cbl_error(CouchbaseLiteError::NotFound))
         } else {
-            Ok(Collection::wrap(collection))
+            Ok(Collection::take_ownership(collection))
         }
     }
 
@@ -596,6 +596,6 @@ impl Drop for Database {
 
 impl Clone for Database {
     fn clone(&self) -> Self {
-        Self::retain(self.get_ref())
+        Self::reference(self.get_ref())
     }
 }

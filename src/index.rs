@@ -148,16 +148,16 @@ impl CblRef for QueryIndex {
 impl QueryIndex {
     //////// CONSTRUCTORS:
 
-    /// Takes ownership of the object and increase it's reference counter.
+    /// Increase the reference counter of the CBL ref, so dropping the instance will NOT free the ref.
     #[allow(dead_code)]
-    pub(crate) fn retain(cbl_ref: *mut CBLQueryIndex) -> Self {
+    pub(crate) fn reference(cbl_ref: *mut CBLQueryIndex) -> Self {
         Self {
             cbl_ref: unsafe { retain(cbl_ref) },
         }
     }
 
-    /// References the object without taking ownership and increasing it's reference counter
-    pub(crate) const fn wrap(cbl_ref: *mut CBLQueryIndex) -> Self {
+    /// Takes ownership of the CBL ref, the reference counter is not increased so dropping the instance will free the ref.
+    pub(crate) const fn take_ownership(cbl_ref: *mut CBLQueryIndex) -> Self {
         Self { cbl_ref }
     }
 
@@ -174,7 +174,7 @@ impl QueryIndex {
 
     /// Returns the collection that the index belongs to.
     pub fn collection(&self) -> Collection {
-        unsafe { Collection::retain(CBLQueryIndex_Collection(self.get_ref())) }
+        unsafe { Collection::reference(CBLQueryIndex_Collection(self.get_ref())) }
     }
 }
 
@@ -292,7 +292,7 @@ impl Collection {
         let slice = from_str(name);
         let index = unsafe { CBLCollection_GetIndex(self.get_ref(), slice.get_ref(), &mut err) };
         if !err {
-            return Ok(QueryIndex::wrap(index));
+            return Ok(QueryIndex::take_ownership(index));
         }
         failure(err)
     }

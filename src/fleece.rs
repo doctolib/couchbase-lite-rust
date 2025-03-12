@@ -323,7 +323,7 @@ impl Value {
     pub fn get_encryptable_value(&self) -> Encryptable {
         unsafe {
             let encryptable = FLDict_GetEncryptableValue(FLValue_AsDict(self.get_ref()));
-            Encryptable::retain(encryptable as *mut CBLEncryptable)
+            Encryptable::reference(encryptable as *mut CBLEncryptable)
         }
     }
 
@@ -598,7 +598,7 @@ impl Dict {
     pub fn get_encryptable_value(&self) -> Encryptable {
         unsafe {
             let encryptable = FLDict_GetEncryptableValue(self.get_ref());
-            Encryptable::retain(encryptable as *mut CBLEncryptable)
+            Encryptable::reference(encryptable as *mut CBLEncryptable)
         }
     }
 

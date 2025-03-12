@@ -49,6 +49,7 @@ impl<T> CblRef for Slice<T> {
 }
 
 impl<T> Slice<T> {
+    /// Takes ownership of the slice, the reference counter is not increased so dropping the instance will free the ref.
     pub(crate) const fn wrap(slice: FLSlice, owner: T) -> Self {
         Self {
             cbl_ref: slice,
