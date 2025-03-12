@@ -63,11 +63,16 @@ impl Collection {
         }
     }
 
+    /// References the object without taking ownership and increasing it's reference counter
+    pub(crate) const fn wrap(cbl_ref: *mut CBLCollection) -> Self {
+        Self { cbl_ref }
+    }
+
     ////////
 
     /// Returns the scope of the collection.
     pub fn scope(&self) -> Scope {
-        unsafe { Scope::retain(CBLCollection_Scope(self.get_ref())) }
+        unsafe { Scope::wrap(CBLCollection_Scope(self.get_ref())) }
     }
 
     /// Returns the collection name.
@@ -90,7 +95,7 @@ impl Collection {
 
     /// Returns the collection's database.
     pub fn database(&self) -> Database {
-        unsafe { Database::wrap(CBLCollection_Database(self.get_ref())) }
+        unsafe { Database::retain(CBLCollection_Database(self.get_ref())) }
     }
 
     /// Returns the number of documents in the collection.

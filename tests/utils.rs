@@ -44,18 +44,21 @@ where
     init_logging();
 
     let start_inst_count = instance_count();
-    let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
-    let cfg = DatabaseConfiguration {
-        directory: tmp_dir.path(),
-        #[cfg(feature = "enterprise")]
-        encryption_key: None,
-    };
-    let mut db = Database::open(DB_NAME, Some(cfg)).expect("open db");
-    assert!(Database::exists(DB_NAME, tmp_dir.path()));
 
-    f(&mut db);
+    {
+        let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
+        let cfg = DatabaseConfiguration {
+            directory: tmp_dir.path(),
+            #[cfg(feature = "enterprise")]
+            encryption_key: None,
+        };
+        let mut db = Database::open(DB_NAME, Some(cfg)).expect("open db");
+        assert!(Database::exists(DB_NAME, tmp_dir.path()));
 
-    db.delete().unwrap();
+        f(&mut db);
+
+        db.delete().unwrap();
+    }
 
     if LEAK_CHECK.is_some() {
         info!("Checking if Couchbase Lite objects were leaked by this test");

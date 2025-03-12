@@ -418,7 +418,7 @@ impl Database {
             if scope.is_null() {
                 None
             } else {
-                Some(Scope::retain(scope))
+                Some(Scope::wrap(scope))
             }
         })
     }
@@ -445,7 +445,7 @@ impl Database {
             if collection.is_null() {
                 None
             } else {
-                Some(Collection::retain(collection))
+                Some(Collection::wrap(collection))
             }
         })
     }
@@ -474,7 +474,7 @@ impl Database {
             )
         };
 
-        check_error(&error).map(|()| Collection::retain(collection))
+        check_error(&error).map(|()| Collection::wrap(collection))
     }
 
     /// Delete an existing collection.
@@ -499,7 +499,7 @@ impl Database {
         let mut error = CBLError::default();
         let scope = unsafe { CBLDatabase_DefaultScope(self.get_ref(), &mut error) };
 
-        check_error(&error).map(|()| Scope::retain(scope))
+        check_error(&error).map(|()| Scope::wrap(scope))
     }
 
     /// Returns the default collection.
@@ -511,7 +511,7 @@ impl Database {
             if collection.is_null() {
                 None
             } else {
-                Some(Collection::retain(collection))
+                Some(Collection::wrap(collection))
             }
         })
     }
@@ -526,7 +526,7 @@ impl Database {
         if collection.is_null() {
             Err(Error::cbl_error(CouchbaseLiteError::NotFound))
         } else {
-            Ok(Collection::retain(collection))
+            Ok(Collection::wrap(collection))
         }
     }
 
