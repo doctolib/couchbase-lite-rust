@@ -85,9 +85,9 @@ $ cargo test --features=enterprise
 Couchbase Lite C allows checking if instances of their objects are still alive through the functions `CBL_InstanceCount` & `CBL_DumpInstances`.
 If the `LEAK_CHECK` environment variable is set, we check that the number of instances at the end of each test is 0.
 
-If this step fails in one of your pull requests, you should look into the `wrap`/`retain` logic on CBL pointers in the constructor of the Rust structs:
-- `wrap` takes ownership of the pointer, it will not increase the ref count of the `ref` CBL pointer so releasing it (in a `drop`) will destroy the pointer
-- `retain` just references the pointer, it will increase the ref count of CBL pointers so releasing it will not destroy the pointer
+If this step fails in one of your pull requests, you should look into the `take_ownership`/`reference` logic on CBL pointers in the constructor of the Rust structs:
+- `take_ownership` takes ownership of the pointer, it will not increase the ref count of the `ref` CBL pointer so releasing it (in a `drop` for example) will free the pointer
+- `reference` just references the pointer, it will increase the ref count of CBL pointers so releasing it will not free the pointer
 
 ```shell
 $ LEAK_CHECK=y cargo test --features=enterprise -- --test-threads 1
