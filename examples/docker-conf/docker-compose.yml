@@ -1,0 +1,48 @@
+services:
+  couchbase-server:
+    image: couchbase-server:dev
+    ports:
+      - "8091:8091" # REST(admin), Web console
+      - "8093:8093" # Query service REST/HTTP traffic
+      - "11207:11207" # memcached port (TLS)
+      - "11210:11210" # memcached port
+    build:
+      context: ${PWD}/couchbase-server-dev
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+    restart: on-failure
+  sync-gateway:
+    image: couchbase/sync-gateway:enterprise
+    ports:
+      - "4984:4984"
+      - "4985:4985"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4985"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - ${PWD}/syncgw-config.json:/etc/sync_gateway/config.json:ro
+      - ${PWD}/wait-for-couchbase-server.sh:/wait-for-couchbase-server.sh
+    depends_on:
+      - couchbase-server
+    entrypoint: ["/wait-for-couchbase-server.sh"]
+    restart: on-failure
+  sync-gateway-setup:
+    image: alpine:3.21.3@sha256:a8560b36e8b8210634f77d9f7f9efd7ffa463e380b75e2e74aff4511df3ef88c
+    depends_on:
+      sync-gateway:
+        condition: service_healthy
+    volumes:
+      - ${PWD}/sync-function.js:/sync-function.js
+      - ${PWD}/db-config.json:/db-config.json
+      - ${PWD}/update.sh:/update.sh
+    links:
+      - "sync-gateway:sg"
+    entrypoint: /update.sh
