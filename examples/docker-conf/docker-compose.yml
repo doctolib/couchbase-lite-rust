@@ -1,6 +1,5 @@
 services:
   couchbase-server:
-    image: couchbase-server:dev
     ports:
       - "8091:8091" # REST(admin), Web console
       - "8093:8093" # Query service REST/HTTP traffic

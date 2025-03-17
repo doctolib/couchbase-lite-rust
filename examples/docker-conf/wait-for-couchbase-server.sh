@@ -15,5 +15,3 @@ echo "CB ready, starting SG"
 sleep 5
 
 /entrypoint.sh -bootstrap.use_tls_server=false  $SG_CONFIG_PATH
-
-
