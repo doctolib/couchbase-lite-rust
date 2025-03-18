@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path};
+use std::path::Path;
 
 use couchbase_lite::*;
 
@@ -12,6 +12,7 @@ fn main() {
             directory: Path::new(
                 "/Users/antoinemenciere/Projects/couchbase-lite-rust-docto/examples",
             ),
+            #[cfg(feature = "enterprise")]
             encryption_key: None,
         }),
     )
