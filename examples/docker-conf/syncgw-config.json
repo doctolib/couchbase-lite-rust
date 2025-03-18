@@ -1,6 +1,6 @@
 {
   "bootstrap": {
-    "server": "couchbase://couchbase-server",
+    "server": "couchbase://cblr-couchbase-server",
     "username": "syncgw",
     "password": "syncgw-pwd"
   },

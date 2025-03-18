@@ -1,9 +1,11 @@
-
 function sync(doc, oldDoc, meta) {
     console.log("=== New document revision ===");
-    console.log("New doc: ", doc);
-    console.log("Old doc: ", oldDoc);
-    console.log("Metadata: ", meta);
+    console.log("New doc:");
+    console.log(doc);
+    console.log("Old doc:");
+    console.log(oldDoc);
+    console.log("Metadata:");
+    console.log(meta);
 
     if(doc.channels) {
         channel(doc.channels);

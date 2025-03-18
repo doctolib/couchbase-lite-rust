@@ -18,5 +18,23 @@ To start both the Sync Gatewawy and Couchbase Server, move to `docker-conf` thro
 $ docker-compose up
 ```
 
-##
+The first time, it's very long.
 
+## Update the config after startup
+
+You can change a few things through the `curl` command.
+
+#### Sync function
+
+Update the file `docker-conf/sync-function.js` and run
+```shell
+$ curl -XPUT -v "http://localhost:4985/my-db/_config/sync" -H 'Content-Type: application/javascript' --data-binary @docker-conf/sync-function.js
+```
+
+#### Database config
+
+Update the file `docker-conf/db-config.json` and run
+
+```shell
+$ curl -XPUT -v "http://localhost:4985/my-db/" -H 'Content-Type: application/json' --data-binary @docker-conf/db-config.json
+```
