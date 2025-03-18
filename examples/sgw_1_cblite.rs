@@ -51,15 +51,7 @@ fn main() {
 
     repl.start(false);
 
-    println!("Replicator state: {:?}", repl.status());
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    println!("Replicator state: {:?}", repl.status());
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    println!("Replicator state: {:?}", repl.status());
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    println!("Replicator state: {:?}", repl.status());
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    println!("Replicator state: {:?}", repl.status());
+    std::thread::sleep(std::time::Duration::from_secs(3));
 
     let mut doc = Document::new_with_id("id1");
     doc.set_properties_as_json(r#"{"name": "allo"}"#).unwrap();
@@ -68,13 +60,7 @@ fn main() {
     assert!(db.get_document("id1").is_ok());
     print!("Doc content: {}", doc.properties_as_json());
 
-    println!("Replicator state: {:?}", repl.status());
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    println!("Replicator state: {:?}", repl.status());
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    println!("Replicator state: {:?}", repl.status());
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    println!("Replicator state: {:?}", repl.status());
+    std::thread::sleep(std::time::Duration::from_secs(3));
 
     repl.stop(None);
 
