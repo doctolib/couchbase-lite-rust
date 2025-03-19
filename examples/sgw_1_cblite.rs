@@ -54,11 +54,17 @@ fn main() {
     std::thread::sleep(std::time::Duration::from_secs(3));
 
     let mut doc = Document::new_with_id("id1");
-    doc.set_properties_as_json(r#"{"name": "allo"}"#).unwrap();
+    doc.set_properties_as_json(
+        &serde_json::json!({
+            "name": "allo2"
+        })
+        .to_string(),
+    )
+    .unwrap();
     db.save_document(&mut doc).unwrap();
 
     assert!(db.get_document("id1").is_ok());
-    print!("Doc content: {}", doc.properties_as_json());
+    println!("Doc content: {}", doc.properties_as_json());
 
     std::thread::sleep(std::time::Duration::from_secs(3));
 
