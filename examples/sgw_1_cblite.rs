@@ -9,9 +9,7 @@ fn main() {
     let mut db = Database::open(
         "test1",
         Some(DatabaseConfiguration {
-            directory: Path::new(
-                "/Users/antoinemenciere/Projects/couchbase-lite-rust-docto/examples",
-            ),
+            directory: Path::new("./"),
             #[cfg(feature = "enterprise")]
             encryption_key: None,
         }),
