@@ -20,6 +20,9 @@ $ docker-compose up
 
 It's very long the first time...
 
+You can then access the Couchbase Server web ui through [http://localhost:8091](http://localhost:8091) (Chrome might not work, Firefox has better support).
+Make sure to not have another instance running.
+
 ## Update the config after startup
 
 You can change a few things through the `curl` command.
