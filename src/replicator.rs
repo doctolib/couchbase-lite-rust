@@ -262,7 +262,7 @@ unsafe extern "C" fn c_replication_push_filter(
     flags: CBLDocumentFlags,
 ) -> bool {
     let repl_conf_context = context as *const ReplicationConfigurationContext;
-    let document = Document::retain(document.cast::<CBLDocument>());
+    let document = Document::reference(document.cast::<CBLDocument>());
     let (is_deleted, is_access_removed) = read_document_flags(flags);
 
     (*repl_conf_context)
@@ -276,7 +276,7 @@ unsafe extern "C" fn c_replication_pull_filter(
     flags: CBLDocumentFlags,
 ) -> bool {
     let repl_conf_context = context as *const ReplicationConfigurationContext;
-    let document = Document::retain(document.cast::<CBLDocument>());
+    let document = Document::reference(document.cast::<CBLDocument>());
     let (is_deleted, is_access_removed) = read_document_flags(flags);
 
     (*repl_conf_context)
@@ -307,12 +307,12 @@ unsafe extern "C" fn c_replication_conflict_resolver(
     let local_document = if local_document.is_null() {
         None
     } else {
-        Some(Document::retain(local_document as *mut CBLDocument))
+        Some(Document::reference(local_document as *mut CBLDocument))
     };
     let remote_document = if remote_document.is_null() {
         None
     } else {
-        Some(Document::retain(remote_document as *mut CBLDocument))
+        Some(Document::reference(remote_document as *mut CBLDocument))
     };
 
     (*repl_conf_context)

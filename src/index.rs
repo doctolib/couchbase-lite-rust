@@ -10,7 +10,7 @@ use crate::{
     slice::{from_str, from_c_str, Slice},
     QueryLanguage, Array,
     collection::Collection,
-    check_error, retain, CouchbaseLiteError,
+    check_error, release, retain, CouchbaseLiteError,
 };
 use std::ffi::CString;
 
@@ -148,11 +148,17 @@ impl CblRef for QueryIndex {
 impl QueryIndex {
     //////// CONSTRUCTORS:
 
-    /// Takes ownership of the object and increase it's reference counter.
-    pub(crate) fn retain(cbl_ref: *mut CBLQueryIndex) -> Self {
+    /// Increase the reference counter of the CBL ref, so dropping the instance will NOT free the ref.
+    #[allow(dead_code)]
+    pub(crate) fn reference(cbl_ref: *mut CBLQueryIndex) -> Self {
         Self {
             cbl_ref: unsafe { retain(cbl_ref) },
         }
+    }
+
+    /// Takes ownership of the CBL ref, the reference counter is not increased so dropping the instance will free the ref.
+    pub(crate) const fn take_ownership(cbl_ref: *mut CBLQueryIndex) -> Self {
+        Self { cbl_ref }
     }
 
     ////////
@@ -168,7 +174,13 @@ impl QueryIndex {
 
     /// Returns the collection that the index belongs to.
     pub fn collection(&self) -> Collection {
-        unsafe { Collection::retain(CBLQueryIndex_Collection(self.get_ref())) }
+        unsafe { Collection::reference(CBLQueryIndex_Collection(self.get_ref())) }
+    }
+}
+
+impl Drop for QueryIndex {
+    fn drop(&mut self) {
+        unsafe { release(self.get_ref()) }
     }
 }
 
@@ -280,7 +292,7 @@ impl Collection {
         let slice = from_str(name);
         let index = unsafe { CBLCollection_GetIndex(self.get_ref(), slice.get_ref(), &mut err) };
         if !err {
-            return Ok(QueryIndex::retain(index));
+            return Ok(QueryIndex::take_ownership(index));
         }
         failure(err)
     }

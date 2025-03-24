@@ -75,8 +75,8 @@ unsafe extern "C" fn c_conflict_handler(
     let callback: ConflictHandler = std::mem::transmute(context);
 
     callback(
-        &mut Document::retain(document_being_saved),
-        &Document::retain(conflicting_document as *mut CBLDocument),
+        &mut Document::reference(document_being_saved),
+        &Document::reference(conflicting_document as *mut CBLDocument),
     )
 }
 
@@ -92,7 +92,7 @@ unsafe extern "C" fn c_database_document_change_listener(
     c_doc_id: FLString,
 ) {
     let callback = context as *const DatabaseDocumentChangeListener;
-    let database = Database::retain(db as *mut CBLDatabase);
+    let database = Database::reference(db as *mut CBLDatabase);
     (*callback)(&database, c_doc_id.to_string());
 }
 
@@ -116,7 +116,7 @@ impl Database {
                     failure(error)
                 };
             }
-            Ok(Document::wrap(doc))
+            Ok(Document::take_ownership(doc))
         }
     }
 
@@ -315,7 +315,7 @@ unsafe extern "C" fn c_collection_document_change_listener(
 ) {
     let callback = context as *const CollectionDocumentChangeListener;
     if let Some(change) = change.as_ref() {
-        let collection = Collection::retain(change.collection as *mut CBLCollection);
+        let collection = Collection::reference(change.collection as *mut CBLCollection);
         (*callback)(collection, change.docID.to_string());
     }
 }
@@ -340,7 +340,7 @@ impl Collection {
                     failure(error)
                 };
             }
-            Ok(Document::wrap(doc))
+            Ok(Document::take_ownership(doc))
         }
     }
 
@@ -515,17 +515,17 @@ impl Document {
     /// Creates a new, empty document in memory, with an automatically generated unique ID.
     /// It will not be added to a database until saved.
     pub fn new() -> Self {
-        unsafe { Self::wrap(CBLDocument_Create()) }
+        unsafe { Self::take_ownership(CBLDocument_Create()) }
     }
 
     /// Creates a new, empty document in memory, with the given ID.
     /// It will not be added to a database until saved.
     pub fn new_with_id(id: &str) -> Self {
-        unsafe { Self::wrap(CBLDocument_CreateWithID(from_str(id).get_ref())) }
+        unsafe { Self::take_ownership(CBLDocument_CreateWithID(from_str(id).get_ref())) }
     }
 
-    /// Takes ownership of the object and increase it's reference counter.
-    pub(crate) fn retain(cbl_ref: *mut CBLDocument) -> Self {
+    /// Increase the reference counter of the CBL ref, so dropping the instance will NOT free the ref.
+    pub(crate) fn reference(cbl_ref: *mut CBLDocument) -> Self {
         unsafe {
             Self {
                 cbl_ref: retain(cbl_ref),
@@ -533,8 +533,8 @@ impl Document {
         }
     }
 
-    /// References the object without taking ownership and increasing it's reference counter
-    pub(crate) const fn wrap(cbl_ref: *mut CBLDocument) -> Self {
+    /// Takes ownership of the CBL ref, the reference counter is not increased so dropping the instance will free the ref.
+    pub(crate) const fn take_ownership(cbl_ref: *mut CBLDocument) -> Self {
         Self { cbl_ref }
     }
 
@@ -607,6 +607,6 @@ impl Drop for Document {
 
 impl Clone for Document {
     fn clone(&self) -> Self {
-        Self::retain(self.get_ref())
+        Self::reference(self.get_ref())
     }
 }

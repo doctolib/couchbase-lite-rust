@@ -24,5 +24,7 @@ jobs:
       - uses: actions/checkout@v3
       - name: Run tests
         run: cargo test --features=${{ matrix.version }} --verbose
+      - name: Run tests with Couchbase Lite C leak check
+        run: LEAK_CHECK=y cargo test --features=${{ matrix.version }} --verbose -- --test-threads 1
       - name: Run tests (with address sanitizer)
         run: LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nightly test --features=${{ matrix.version }} --verbose
