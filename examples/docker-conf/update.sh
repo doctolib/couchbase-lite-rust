@@ -7,6 +7,9 @@ export DB_NAME="my-db"
 echo 'START SG Update'
 echo
 
+#Can I bypass the config if it's already done? This command does not work:
+#curl -I "http://localhost:4985/my-db/" -w "%{http_code}"` --output >(cat >&3)
+
 # Setting up database API: https://docs.couchbase.com/sync-gateway/current/rest_api_admin.html#tag/Database-Management/operation/put_db-
 echo 'Setting up the database...'
 curl -XPUT -v "http://sg:4985/${DB_NAME}/" -H 'Content-Type: application/json' --data-binary @db-config.json
