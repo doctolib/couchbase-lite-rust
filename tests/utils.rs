@@ -154,11 +154,12 @@ fn generate_replication_configuration(
 #[cfg(feature = "enterprise")]
 pub struct ReplicationTwoDbsTester {
     _tmp_dir: TempDir,
-    _leak_checker: LeakChecker,
     pub local_database: Database,
     central_database: Database,
     replicator: Replicator,
     replicator_continuous: bool,
+    // Keep _leak_checker at the end, fields in a struct are dropped in declaration order
+    _leak_checker: LeakChecker,
 }
 
 #[cfg(feature = "enterprise")]
@@ -206,11 +207,11 @@ impl ReplicationTwoDbsTester {
         // Return
         Self {
             _tmp_dir: tmp_dir,
-            _leak_checker: LeakChecker::new(),
             local_database,
             central_database,
             replicator,
             replicator_continuous,
+            _leak_checker: LeakChecker::new(),
         }
     }
 
@@ -279,7 +280,6 @@ impl Drop for ReplicationTwoDbsTester {
 #[cfg(feature = "enterprise")]
 pub struct ReplicationThreeDbsTester {
     _tmp_dir: TempDir,
-    _leak_checker: LeakChecker,
     local_database_1: Database,
     local_database_2: Database,
     central_database: Database,
@@ -287,6 +287,8 @@ pub struct ReplicationThreeDbsTester {
     replicator_1_continuous: bool,
     replicator_2: Replicator,
     replicator_2_continuous: bool,
+    // Keep _leak_checker at the end, fields in a struct are dropped in declaration order
+    _leak_checker: LeakChecker,
 }
 
 #[cfg(feature = "enterprise")]
@@ -353,7 +355,6 @@ impl ReplicationThreeDbsTester {
         // Return
         Self {
             _tmp_dir: tmp_dir,
-            _leak_checker: LeakChecker::new(),
             local_database_1,
             local_database_2,
             central_database,
@@ -361,6 +362,7 @@ impl ReplicationThreeDbsTester {
             replicator_1_continuous,
             replicator_2,
             replicator_2_continuous,
+            _leak_checker: LeakChecker::new(),
         }
     }
 
