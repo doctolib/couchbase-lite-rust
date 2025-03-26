@@ -25,7 +25,7 @@ use std::{
 };
 use crate::{
     CblRef, Database, Dict, Document, Error, ListenerToken, MutableDict, Result, check_error,
-    release, retain,
+    release,
     slice::{from_str, self},
     c_api::{
         CBLListener_Remove, CBLAuth_CreatePassword, CBLAuth_CreateSession, CBLAuthenticator,
@@ -103,6 +103,14 @@ impl Clone for Endpoint {
         Self {
             cbl_ref: self.cbl_ref,
             url: self.url.clone(),
+        }
+    }
+}
+
+impl Drop for Endpoint {
+    fn drop(&mut self) {
+        unsafe {
+            release(self.get_ref());
         }
     }
 }
@@ -786,7 +794,7 @@ impl Replicator {
                 database: config
                     .database
                     .as_ref()
-                    .map(|d| retain(d.get_ref()))
+                    .map(|d| d.get_ref())
                     .unwrap_or(ptr::null_mut()),
                 endpoint: config.endpoint.get_ref(),
                 replicatorType: config.replicator_type.clone().into(),
