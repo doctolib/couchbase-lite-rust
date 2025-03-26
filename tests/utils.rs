@@ -68,6 +68,10 @@ impl Drop for LeakChecker {
 
             if self.start_instance_count != self.end_instance_count {
                 info!("Leaks detected :-(");
+                info!(
+                    "Instances before: {} | Instances after: {}",
+                    self.start_instance_count, self.end_instance_count
+                );
                 dump_instances();
                 panic!("Memory leaks detected");
                 // NOTE: This failure is likely to happen if the tests run multi-threaded, as happens by
@@ -170,6 +174,8 @@ impl ReplicationTwoDbsTester {
     ) -> Self {
         init_logging();
 
+        let _leak_checker = LeakChecker::new();
+
         // Create databases
         let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
         let tmp_dir_path = tmp_dir.path();
@@ -211,7 +217,7 @@ impl ReplicationTwoDbsTester {
             central_database,
             replicator,
             replicator_continuous,
-            _leak_checker: LeakChecker::new(),
+            _leak_checker,
         }
     }
 
@@ -301,6 +307,8 @@ impl ReplicationThreeDbsTester {
     ) -> Self {
         init_logging();
 
+        let _leak_checker = LeakChecker::new();
+
         // Create databases
         let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
         let local_database_1_configuration = DatabaseConfiguration {
@@ -362,7 +370,7 @@ impl ReplicationThreeDbsTester {
             replicator_1_continuous,
             replicator_2,
             replicator_2_continuous,
-            _leak_checker: LeakChecker::new(),
+            _leak_checker,
         }
     }
 
