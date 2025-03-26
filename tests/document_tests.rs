@@ -3,11 +3,15 @@ extern crate couchbase_lite;
 
 use self::couchbase_lite::*;
 use std::time::Duration;
+use utils::{init_logging, LeakChecker};
 
 pub mod utils;
 
 #[test]
 fn document_new() {
+    init_logging();
+    let _leak_checker = LeakChecker::new();
+
     let document = Document::new();
     assert_ne!(document.id(), "");
     assert_eq!(document.revision_id(), None);
@@ -18,6 +22,9 @@ fn document_new() {
 
 #[test]
 fn document_new_with_id() {
+    init_logging();
+    let _leak_checker = LeakChecker::new();
+
     let document = Document::new_with_id("foo");
     assert_eq!(document.id(), "foo");
     assert_eq!(document.revision_id(), None);
@@ -70,6 +77,9 @@ fn document_sequence() {
 
 #[test]
 fn document_properties() {
+    init_logging();
+    let _leak_checker = LeakChecker::new();
+
     let mut document = Document::new();
     let mut properties = MutableDict::new();
     properties.at("foo").put_bool(false);
@@ -87,6 +97,9 @@ fn document_properties() {
 
 #[test]
 fn document_properties_as_json() {
+    init_logging();
+    let _leak_checker = LeakChecker::new();
+
     let mut document = Document::new();
     document
         .set_properties_as_json(r#"{"foo":true,"bar":true}"#)

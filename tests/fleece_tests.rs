@@ -20,9 +20,15 @@
 extern crate couchbase_lite;
 
 use couchbase_lite::*;
+use utils::{init_logging, LeakChecker};
+
+pub mod utils;
 
 #[test]
 fn empty_values() {
+    init_logging();
+    let _leak_checker = LeakChecker::new();
+
     let v = Value::default();
     assert_eq!(v.get_type(), ValueType::Undefined);
     assert!(!v.is_type(ValueType::Bool));
@@ -38,6 +44,9 @@ fn empty_values() {
 
 #[test]
 fn basic_values() {
+    init_logging();
+    let _leak_checker = LeakChecker::new();
+
     let doc = Fleece::parse_json(r#"{"i":1234,"f":12.34,"a":[1, 2],"s":"Foo"}"#).unwrap();
     let dict = doc.as_dict();
     assert_eq!(dict.count(), 4);
@@ -82,6 +91,9 @@ fn basic_values() {
 
 #[test]
 fn nested_borrow_check() {
+    init_logging();
+    let _leak_checker = LeakChecker::new();
+
     let v: Value;
     let mut str = String::new();
 
@@ -116,6 +128,9 @@ fn borrow_check() {
 
 #[test]
 fn dict_to_hash_set() {
+    init_logging();
+    let _leak_checker = LeakChecker::new();
+
     let mut mut_dict = MutableDict::new();
 
     mut_dict.at("id1").put_bool(true);
@@ -132,6 +147,9 @@ fn dict_to_hash_set() {
 
 #[test]
 fn mutable_dict() {
+    init_logging();
+    let _leak_checker = LeakChecker::new();
+
     let mut dict = MutableDict::new();
     assert_eq!(dict.count(), 0);
     assert_eq!(dict.get("a"), Value::UNDEFINED);
@@ -152,6 +170,9 @@ fn mutable_dict() {
 
 #[test]
 fn mutable_dict_to_from_hash_map() {
+    init_logging();
+    let _leak_checker = LeakChecker::new();
+
     let mut dict = MutableDict::new();
 
     dict.at("id1").put_string("value1");
@@ -170,6 +191,9 @@ fn mutable_dict_to_from_hash_map() {
 
 #[test]
 fn dict_exact_size_iterator() {
+    init_logging();
+    let _leak_checker = LeakChecker::new();
+
     let mut mut_dict = MutableDict::new();
     mut_dict.at("1").put_string("value1");
     mut_dict.at("2").put_string("value2");
@@ -182,6 +206,9 @@ fn dict_exact_size_iterator() {
 
 #[test]
 fn dict_from_iterator() {
+    init_logging();
+    let _leak_checker = LeakChecker::new();
+
     let dict: MutableDict = Fleece::parse_json(r#"{"1": "value1","f":12.34}"#)
         .unwrap()
         .as_dict()
@@ -202,6 +229,9 @@ fn dict_from_iterator() {
 
 #[test]
 fn array_at() {
+    init_logging();
+    let _leak_checker = LeakChecker::new();
+
     let mut mut_arr = MutableArray::new();
     assert!(mut_arr.at(0).is_none());
     mut_arr.append().put_string("value1");
@@ -210,6 +240,9 @@ fn array_at() {
 
 #[test]
 fn array_exact_size_iterator() {
+    init_logging();
+    let _leak_checker = LeakChecker::new();
+
     let mut mut_arr = MutableArray::new();
     mut_arr.append().put_string("value1");
     mut_arr.append().put_string("value2");
@@ -222,6 +255,9 @@ fn array_exact_size_iterator() {
 
 #[test]
 fn array_from_iterator() {
+    init_logging();
+    let _leak_checker = LeakChecker::new();
+
     let arr: MutableArray = Fleece::parse_json(r#"["value1","value2"]"#)
         .unwrap()
         .as_array()

@@ -11,11 +11,6 @@ use std::{
 #[cfg(feature = "enterprise")]
 use std::collections::HashMap;
 
-// Enables check for leaks of native CBL objects after `with_db()` finishes.
-// WARNING: These checks only work if one test method runs at a time, i.e. testing is single
-//          threaded. Run as `cargo test -- --test-threads=1` or you'll get false positives.
-const LEAK_CHECK: Option<&'static str> = option_env!("LEAK_CHECK");
-
 pub const DB_NAME: &str = "test_db";
 
 const LEVEL_PREFIX: [&str; 5] = ["((", "_", "", "WARNING: ", "***ERROR: "];
@@ -36,7 +31,7 @@ pub fn init_logging() {
     logging::set_console_level(logging::Level::None);
 }
 
-struct LeakChecker {
+pub struct LeakChecker {
     is_checking: bool,
     start_instance_count: usize,
     end_instance_count: usize,

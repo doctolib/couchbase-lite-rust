@@ -22,7 +22,7 @@ extern crate lazy_static;
 use self::couchbase_lite::*;
 use self::tempdir::TempDir;
 use lazy_static::lazy_static;
-use utils::init_logging;
+use utils::{init_logging, LeakChecker};
 
 pub mod utils;
 
@@ -44,6 +44,7 @@ fn delete_file() {
     pub const DB_NAME: &str = "test_db";
 
     init_logging();
+    let _leak_checker = LeakChecker::new();
 
     let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
     let cfg = DatabaseConfiguration {
@@ -66,6 +67,7 @@ fn copy_file() {
     pub const DB_NAME_BACKUP: &str = "test_db_backup";
 
     init_logging();
+    let _leak_checker = LeakChecker::new();
 
     // Initial DB
     let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
@@ -147,6 +149,9 @@ fn db_properties() {
 #[test]
 #[cfg(feature = "enterprise")]
 fn db_encryption_key() {
+    init_logging();
+    let _leak_checker = LeakChecker::new();
+
     let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
     let cfg_no_encryption = DatabaseConfiguration {
         directory: tmp_dir.path(),
