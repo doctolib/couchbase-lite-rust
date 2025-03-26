@@ -66,7 +66,7 @@ impl CblRef for Encryptable {
 
 impl From<*mut CBLEncryptable> for Encryptable {
     fn from(cbl_ref: *mut CBLEncryptable) -> Self {
-        Self::reference(cbl_ref)
+        Self::take_ownership(cbl_ref)
     }
 }
 
@@ -78,6 +78,11 @@ impl Encryptable {
         Self {
             cbl_ref: unsafe { retain(cbl_ref) },
         }
+    }
+
+    /// Takes ownership of the CBL ref, the reference counter is not increased so dropping the instance will free the ref.
+    pub(crate) const fn take_ownership(cbl_ref: *mut CBLEncryptable) -> Self {
+        Self { cbl_ref }
     }
 
     ////////
