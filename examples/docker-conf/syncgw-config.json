@@ -1,0 +1,43 @@
+{
+  "bootstrap": {
+    "server": "couchbase://cblr-couchbase-server",
+    "username": "syncgw",
+    "password": "syncgw-pwd"
+  },
+  "api": {
+    "public_interface": ":4984",
+    "admin_interface": ":4985",
+    "admin_interface_authentication": false,
+    "https": {}
+  },
+  "logging": {
+    "console": {
+      "rotation": {},
+      "log_level": "debug",
+      "log_keys": [
+        "*"
+      ]
+    },
+    "error": {
+      "rotation": {}
+    },
+    "warn": {
+      "rotation": {}
+    },
+    "info": {
+      "rotation": {}
+    },
+    "debug": {
+      "rotation": {}
+    },
+    "trace": {
+      "rotation": {}
+    },
+    "stats": {
+      "rotation": {}
+    }
+  },
+  "auth": {},
+  "replicator": {},
+  "unsupported": {}
+}
