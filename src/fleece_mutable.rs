@@ -86,7 +86,9 @@ impl MutableArray {
     }
 
     pub(crate) unsafe fn adopt(array: FLMutableArray) -> Self {
-        FLValue_Retain(array as FLValue);
+        unsafe {
+            FLValue_Retain(array as FLValue);
+        }
         Self { cbl_ref: array }
     }
 
@@ -278,7 +280,9 @@ impl MutableDict {
     }
 
     pub(crate) unsafe fn adopt(dict: FLMutableDict) -> Self {
-        FLValue_Retain(dict as FLValue);
+        unsafe {
+            FLValue_Retain(dict as FLValue);
+        }
         Self { cbl_ref: dict }
     }
 

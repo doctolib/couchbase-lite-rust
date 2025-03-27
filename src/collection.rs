@@ -148,19 +148,21 @@ impl Clone for Collection {
 /// A collection change listener callback, invoked after one or more documents are changed on disk.
 pub type CollectionChangeListener = Box<dyn Fn(Collection, Vec<String>)>;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn c_collection_change_listener(
     context: *mut ::std::os::raw::c_void,
     change: *const CBLCollectionChange,
 ) {
     let callback = context as *const CollectionChangeListener;
-    if let Some(change) = change.as_ref() {
-        let collection = Collection::reference(change.collection as *mut CBLCollection);
-        let doc_ids = std::slice::from_raw_parts(change.docIDs, change.numDocs as usize)
-            .iter()
-            .filter_map(|doc_id| doc_id.to_string())
-            .collect();
+    unsafe {
+        if let Some(change) = change.as_ref() {
+            let collection = Collection::reference(change.collection as *mut CBLCollection);
+            let doc_ids = std::slice::from_raw_parts(change.docIDs, change.numDocs as usize)
+                .iter()
+                .filter_map(|doc_id| doc_id.to_string())
+                .collect();
 
-        (*callback)(collection, doc_ids);
+            (*callback)(collection, doc_ids);
+        }
     }
 }

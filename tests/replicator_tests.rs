@@ -378,9 +378,11 @@ fn conflict_resolver_save_keep_local() {
 
         // Modify 'foo' in DB1 from outdated document
         foo.mutable_properties().at("i").put_i64(i1);
-        assert!(local_db
-            .save_document_resolving(&mut foo, move |_, _| true)
-            .is_ok());
+        assert!(
+            local_db
+                .save_document_resolving(&mut foo, move |_, _| true)
+                .is_ok()
+        );
 
         // Assert conflict was resolved by keeping latest version
         assert!(utils::check_callback_with_wait(
@@ -460,9 +462,11 @@ fn conflict_resolver_save_keep_remote() {
 
         // Modify 'foo' in DB1 from outdated document
         foo.mutable_properties().at("i").put_i64(i1);
-        assert!(local_db
-            .save_document_resolving(&mut foo, move |_, _| false)
-            .is_err());
+        assert!(
+            local_db
+                .save_document_resolving(&mut foo, move |_, _| false)
+                .is_err()
+        );
 
         // Assert conflict was resolved by keeping central's version
         assert!(utils::check_callback_with_wait(

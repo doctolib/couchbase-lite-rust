@@ -1,8 +1,16 @@
 [package]
 name = "couchbase_lite"
-# The first three numbers correspond to the Couchbase Lite C release, the fourth number corresponds to the Doctolib release
+description = "Rust bindings for Couchbase Lite C"
+
+# The first three numbers correspond to the Couchbase Lite C release, the fourth number corresponds to the Rust release
 version = "3.2.1-0"
-edition = "2021"
+
+edition = "2024"
+
+license-file = "libcblite_enterprise/LICENSE.txt"
+keywords = ["couchbase"]
+categories = ["database"]
+publish = ["couchbase-lite-rust"]
 
 [dependencies]
 enum_primitive = "*"
@@ -16,7 +24,7 @@ default-features = false # Disable features which are enabled by default
 features = ["user-hooks"]
 
 [build-dependencies]
-bindgen = "0.69.4"
+bindgen = "0.71.1"
 fs_extra = "1.2.0"
 
 [lib]

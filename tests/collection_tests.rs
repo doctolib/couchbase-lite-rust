@@ -34,17 +34,20 @@ fn create_delete_scopes_collections() {
         );
 
         // Get collection
-        assert!(db
-            .collection(DEFAULT_NAME.to_string(), DEFAULT_NAME.to_string())
-            .unwrap()
-            .is_some());
-        assert!(db
-            .collection(unknown.clone(), DEFAULT_NAME.to_string())
-            .unwrap()
-            .is_none()); // Invalid collection => None
-        assert!(db
-            .collection(DEFAULT_NAME.to_string(), unknown.clone())
-            .is_err()); // Invalid scope => Err
+        assert!(
+            db.collection(DEFAULT_NAME.to_string(), DEFAULT_NAME.to_string())
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            db.collection(unknown.clone(), DEFAULT_NAME.to_string())
+                .unwrap()
+                .is_none()
+        ); // Invalid collection => None
+        assert!(
+            db.collection(DEFAULT_NAME.to_string(), unknown.clone())
+                .is_err()
+        ); // Invalid scope => Err
         assert_eq!(
             db.default_collection().unwrap().unwrap().full_name(),
             db.collection(DEFAULT_NAME.to_string(), DEFAULT_NAME.to_string())
@@ -110,42 +113,50 @@ fn create_delete_scopes_collections() {
         }
 
         // Delete collections
-        assert!(db
-            .delete_collection(DEFAULT_NAME.to_string(), unknown.clone())
-            .is_err()); // Invalid scope => Err
-        assert!(db
-            .delete_collection(unknown.clone(), DEFAULT_NAME.to_string())
-            .is_ok()); // Invalid collection => Ok
-        assert!(db
-            .delete_collection(unknown.clone(), unknown.clone())
-            .is_ok()); // Invalid collection & scope => Ok
+        assert!(
+            db.delete_collection(DEFAULT_NAME.to_string(), unknown.clone())
+                .is_err()
+        ); // Invalid scope => Err
+        assert!(
+            db.delete_collection(unknown.clone(), DEFAULT_NAME.to_string())
+                .is_ok()
+        ); // Invalid collection => Ok
+        assert!(
+            db.delete_collection(unknown.clone(), unknown.clone())
+                .is_ok()
+        ); // Invalid collection & scope => Ok
 
-        assert!(db
-            .delete_collection(new_collection_2.clone(), new_scope.clone())
-            .is_ok());
+        assert!(
+            db.delete_collection(new_collection_2.clone(), new_scope.clone())
+                .is_ok()
+        );
         assert!(db.scope(new_scope.clone()).unwrap().is_none());
         assert_eq!(db.scope_names().unwrap(), vec![DEFAULT_NAME]);
-        assert!(db
-            .collection(new_collection_2.clone(), new_scope.clone())
-            .unwrap()
-            .is_none());
+        assert!(
+            db.collection(new_collection_2.clone(), new_scope.clone())
+                .unwrap()
+                .is_none()
+        );
         assert_eq!(
             db.collection_names(new_scope.clone()).unwrap(),
             Vec::<String>::default()
         );
 
-        assert!(db
-            .delete_collection(new_collection_1.clone(), DEFAULT_NAME.to_string())
-            .is_ok());
+        assert!(
+            db.delete_collection(new_collection_1.clone(), DEFAULT_NAME.to_string())
+                .is_ok()
+        );
         assert!(db.scope(DEFAULT_NAME.to_string()).unwrap().is_some()); // Default scope kept
-        assert!(db
-            .collection(new_collection_1.clone(), DEFAULT_NAME.to_string())
-            .unwrap()
-            .is_none());
+        assert!(
+            db.collection(new_collection_1.clone(), DEFAULT_NAME.to_string())
+                .unwrap()
+                .is_none()
+        );
 
-        assert!(db
-            .delete_collection(DEFAULT_NAME.to_string(), DEFAULT_NAME.to_string())
-            .is_err()); // Impossible to delete default collection
+        assert!(
+            db.delete_collection(DEFAULT_NAME.to_string(), DEFAULT_NAME.to_string())
+                .is_err()
+        ); // Impossible to delete default collection
     });
 }
 
@@ -301,10 +312,12 @@ fn scope_accessors() {
             vec![new_collection_2.clone(), new_collection_1.clone()]
         );
 
-        assert!(default_scope
-            .collection("unknwon".to_string())
-            .unwrap()
-            .is_none());
+        assert!(
+            default_scope
+                .collection("unknwon".to_string())
+                .unwrap()
+                .is_none()
+        );
 
         assert_eq!(
             default_scope
@@ -349,12 +362,13 @@ fn collection_documents() {
             .expect("save_document");
 
         assert!(collection_1.get_document("foo").is_ok());
-        assert!(db
-            .default_collection()
-            .unwrap()
-            .unwrap()
-            .get_document("foo")
-            .is_err()); // Document 1 not in default collection
+        assert!(
+            db.default_collection()
+                .unwrap()
+                .unwrap()
+                .get_document("foo")
+                .is_err()
+        ); // Document 1 not in default collection
 
         // Collection 2
         let mut collection_2 = db

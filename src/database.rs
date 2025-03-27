@@ -132,7 +132,7 @@ enum_from_primitive! {
 #[deprecated(note = "please use `CollectionChangeListener` on default collection instead")]
 type DatabaseChangeListener = Box<dyn Fn(&Database, Vec<String>)>;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn c_database_change_listener(
     context: *mut ::std::os::raw::c_void,
     db: *const CBLDatabase,
@@ -142,26 +142,30 @@ unsafe extern "C" fn c_database_change_listener(
     let callback = context as *const DatabaseChangeListener;
     let database = Database::reference(db as *mut CBLDatabase);
 
-    let doc_ids = std::slice::from_raw_parts(c_doc_ids, num_docs as usize)
-        .iter()
-        .filter_map(|doc_id| doc_id.to_string())
-        .collect();
+    unsafe {
+        let doc_ids = std::slice::from_raw_parts(c_doc_ids, num_docs as usize)
+            .iter()
+            .filter_map(|doc_id| doc_id.to_string())
+            .collect();
 
-    (*callback)(&database, doc_ids);
+        (*callback)(&database, doc_ids);
+    }
 }
 
 /// Callback indicating that the database (or an object belonging to it) is ready to call one or more listeners.
 type BufferNotifications = fn(db: &Database);
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn c_database_buffer_notifications(
     context: *mut ::std::os::raw::c_void,
     db: *mut CBLDatabase,
 ) {
-    let callback: BufferNotifications = std::mem::transmute(context);
+    unsafe {
+        let callback: BufferNotifications = std::mem::transmute(context);
 
-    let database = Database::reference(db.cast::<CBLDatabase>());
+        let database = Database::reference(db.cast::<CBLDatabase>());
 
-    callback(&database);
+        callback(&database);
+    }
 }
 
 /// A connection to an open database
@@ -213,11 +217,13 @@ impl Database {
 
     unsafe fn _open(name: &str, config_ptr: *const CBLDatabaseConfiguration) -> Result<Self> {
         let mut err = CBLError::default();
-        let db_ref = CBLDatabase_Open(from_str(name).get_ref(), config_ptr, &mut err);
-        if db_ref.is_null() {
-            return failure(err);
+        unsafe {
+            let db_ref = CBLDatabase_Open(from_str(name).get_ref(), config_ptr, &mut err);
+            if db_ref.is_null() {
+                return failure(err);
+            }
+            Ok(Self::take_ownership(db_ref))
         }
-        Ok(Self::take_ownership(db_ref))
     }
 
     //////// OTHER STATIC METHODS:
