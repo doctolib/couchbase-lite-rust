@@ -41,7 +41,7 @@ pub enum QueryLanguage {
 
 type ChangeListener = Box<dyn Fn(&Query, &ListenerToken)>;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn c_query_change_listener(
     context: *mut ::std::os::raw::c_void,
     query: *mut CBLQuery,
@@ -51,7 +51,9 @@ unsafe extern "C" fn c_query_change_listener(
     let query = Query::reference(query.cast::<CBLQuery>());
     let token = ListenerToken::new(token);
 
-    (*callback)(&query, &token);
+    unsafe {
+        (*callback)(&query, &token);
+    }
 }
 
 /** A compiled database query. */

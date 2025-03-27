@@ -263,7 +263,7 @@ impl CblRef for ProxySettings {
 /** A callback that can decide whether a particular document should be pushed or pulled. */
 pub type ReplicationFilter = Box<dyn Fn(&Document, bool, bool) -> bool>;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn c_replication_push_filter(
     context: *mut ::std::os::raw::c_void,
     document: *mut CBLDocument,
@@ -273,10 +273,12 @@ unsafe extern "C" fn c_replication_push_filter(
     let document = Document::reference(document.cast::<CBLDocument>());
     let (is_deleted, is_access_removed) = read_document_flags(flags);
 
-    (*repl_conf_context)
-        .push_filter
-        .as_ref()
-        .is_some_and(|callback| callback(&document, is_deleted, is_access_removed))
+    unsafe {
+        (*repl_conf_context)
+            .push_filter
+            .as_ref()
+            .is_some_and(|callback| callback(&document, is_deleted, is_access_removed))
+    }
 }
 unsafe extern "C" fn c_replication_pull_filter(
     context: *mut ::std::os::raw::c_void,
@@ -287,10 +289,12 @@ unsafe extern "C" fn c_replication_pull_filter(
     let document = Document::reference(document.cast::<CBLDocument>());
     let (is_deleted, is_access_removed) = read_document_flags(flags);
 
-    (*repl_conf_context)
-        .pull_filter
-        .as_ref()
-        .is_some_and(|callback| callback(&document, is_deleted, is_access_removed))
+    unsafe {
+        (*repl_conf_context)
+            .pull_filter
+            .as_ref()
+            .is_some_and(|callback| callback(&document, is_deleted, is_access_removed))
+    }
 }
 fn read_document_flags(flags: CBLDocumentFlags) -> (bool, bool) {
     (flags & DELETED != 0, flags & ACCESS_REMOVED != 0)
@@ -311,25 +315,27 @@ unsafe extern "C" fn c_replication_conflict_resolver(
 ) -> *const CBLDocument {
     let repl_conf_context = context as *const ReplicationConfigurationContext;
 
-    let doc_id = document_id.to_string().unwrap_or_default();
-    let local_document = if local_document.is_null() {
-        None
-    } else {
-        Some(Document::reference(local_document as *mut CBLDocument))
-    };
-    let remote_document = if remote_document.is_null() {
-        None
-    } else {
-        Some(Document::reference(remote_document as *mut CBLDocument))
-    };
+    unsafe {
+        let doc_id = document_id.to_string().unwrap_or_default();
+        let local_document = if local_document.is_null() {
+            None
+        } else {
+            Some(Document::reference(local_document as *mut CBLDocument))
+        };
+        let remote_document = if remote_document.is_null() {
+            None
+        } else {
+            Some(Document::reference(remote_document as *mut CBLDocument))
+        };
 
-    (*repl_conf_context)
-        .conflict_resolver
-        .as_ref()
-        .map_or(ptr::null(), |callback| {
-            callback(&doc_id, local_document, remote_document)
-                .map_or(ptr::null(), |d| d.get_ref() as *const CBLDocument)
-        })
+        (*repl_conf_context)
+            .conflict_resolver
+            .as_ref()
+            .map_or(ptr::null(), |callback| {
+                callback(&doc_id, local_document, remote_document)
+                    .map_or(ptr::null(), |d| d.get_ref() as *const CBLDocument)
+            })
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -353,7 +359,7 @@ pub type DefaultCollectionPropertyEncryptor = fn(
     kid: Option<String>,
     error: &Error,
 ) -> std::result::Result<Vec<u8>, EncryptionError>;
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[cfg(feature = "enterprise")]
 pub extern "C" fn c_default_collection_property_encryptor(
     context: *mut ::std::os::raw::c_void,
@@ -432,7 +438,7 @@ pub type CollectionPropertyEncryptor = fn(
     kid: Option<String>,
     error: &Error,
 ) -> std::result::Result<Vec<u8>, EncryptionError>;
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[cfg(feature = "enterprise")]
 pub extern "C" fn c_collection_property_encryptor(
     context: *mut ::std::os::raw::c_void,
@@ -514,7 +520,7 @@ pub type DefaultCollectionPropertyDecryptor = fn(
     kid: Option<String>,
     error: &Error,
 ) -> std::result::Result<Vec<u8>, EncryptionError>;
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[cfg(feature = "enterprise")]
 pub extern "C" fn c_default_collection_property_decryptor(
     context: *mut ::std::os::raw::c_void,
@@ -593,7 +599,7 @@ pub type CollectionPropertyDecryptor = fn(
     kid: Option<String>,
     error: &Error,
 ) -> std::result::Result<Vec<u8>, EncryptionError>;
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[cfg(feature = "enterprise")]
 pub extern "C" fn c_collection_property_decryptor(
     context: *mut ::std::os::raw::c_void,
@@ -1128,15 +1134,17 @@ impl From<CBLReplicatorStatus> for ReplicatorStatus {
 
 /** A callback that notifies you when the replicator's status changes. */
 pub type ReplicatorChangeListener = Box<dyn Fn(ReplicatorStatus)>;
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn c_replicator_change_listener(
     context: *mut ::std::os::raw::c_void,
     _replicator: *mut CBLReplicator,
     status: *const CBLReplicatorStatus,
 ) {
     let callback = context as *const ReplicatorChangeListener;
-    let status: ReplicatorStatus = (*status).into();
-    (*callback)(status);
+    unsafe {
+        let status: ReplicatorStatus = (*status).into();
+        (*callback)(status);
+    }
 }
 
 /** A callback that notifies you when documents are replicated. */
@@ -1156,20 +1164,22 @@ unsafe extern "C" fn c_replicator_document_change_listener(
         Direction::Pulled
     };
 
-    let repl_documents = std::slice::from_raw_parts(documents, num_documents as usize)
-        .iter()
-        .filter_map(|document| {
-            document.ID.to_string().map(|doc_id| ReplicatedDocument {
-                id: doc_id,
-                flags: document.flags,
-                error: check_error(&document.error),
-                scope: document.scope.to_string(),
-                collection: document.collection.to_string(),
+    unsafe {
+        let repl_documents = std::slice::from_raw_parts(documents, num_documents as usize)
+            .iter()
+            .filter_map(|document| {
+                document.ID.to_string().map(|doc_id| ReplicatedDocument {
+                    id: doc_id,
+                    flags: document.flags,
+                    error: check_error(&document.error),
+                    scope: document.scope.to_string(),
+                    collection: document.collection.to_string(),
+                })
             })
-        })
-        .collect();
+            .collect();
 
-    (*callback)(direction, repl_documents);
+        (*callback)(direction, repl_documents);
+    }
 }
 
 /** Flags describing a replicated document. */

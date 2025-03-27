@@ -66,18 +66,20 @@ pub enum ConcurrencyControl {
 /// (probably by a pull replicator, or by application code on another thread)
 /// since it was loaded into the CBLDocument being saved.
 type ConflictHandler = fn(&mut Document, &Document) -> bool;
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn c_conflict_handler(
     context: *mut ::std::os::raw::c_void,
     document_being_saved: *mut CBLDocument,
     conflicting_document: *const CBLDocument,
 ) -> bool {
-    let callback: ConflictHandler = std::mem::transmute(context);
+    unsafe {
+        let callback: ConflictHandler = std::mem::transmute(context);
 
-    callback(
-        &mut Document::reference(document_being_saved),
-        &Document::reference(conflicting_document as *mut CBLDocument),
-    )
+        callback(
+            &mut Document::reference(document_being_saved),
+            &Document::reference(conflicting_document as *mut CBLDocument),
+        )
+    }
 }
 
 ///  A document change listener lets you detect changes made to a specific document after they
@@ -85,15 +87,17 @@ unsafe extern "C" fn c_conflict_handler(
 #[deprecated(note = "please use `CollectionDocumentChangeListener` instead")]
 type DatabaseDocumentChangeListener = Box<dyn Fn(&Database, Option<String>)>;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn c_database_document_change_listener(
     context: *mut ::std::os::raw::c_void,
     db: *const CBLDatabase,
     c_doc_id: FLString,
 ) {
-    let callback = context as *const DatabaseDocumentChangeListener;
-    let database = Database::reference(db as *mut CBLDatabase);
-    (*callback)(&database, c_doc_id.to_string());
+    unsafe {
+        let callback = context as *const DatabaseDocumentChangeListener;
+        let database = Database::reference(db as *mut CBLDatabase);
+        (*callback)(&database, c_doc_id.to_string());
+    }
 }
 
 //////// DATABASE'S DOCUMENT API:
@@ -308,15 +312,17 @@ impl Database {
 /// are persisted to the collection.
 type CollectionDocumentChangeListener = Box<dyn Fn(Collection, Option<String>)>;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn c_collection_document_change_listener(
     context: *mut ::std::os::raw::c_void,
     change: *const CBLDocumentChange,
 ) {
     let callback = context as *const CollectionDocumentChangeListener;
-    if let Some(change) = change.as_ref() {
-        let collection = Collection::reference(change.collection as *mut CBLCollection);
-        (*callback)(collection, change.docID.to_string());
+    unsafe {
+        if let Some(change) = change.as_ref() {
+            let collection = Collection::reference(change.collection as *mut CBLCollection);
+            (*callback)(collection, change.docID.to_string());
+        }
     }
 }
 

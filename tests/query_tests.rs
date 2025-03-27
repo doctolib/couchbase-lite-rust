@@ -110,12 +110,14 @@ fn get_index() {
     utils::with_db(|db| {
         // Default collection
         let default_collection = db.default_collection().unwrap().unwrap();
-        assert!(default_collection
-            .create_index(
-                "new_index1",
-                &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField"]]"#),
-            )
-            .unwrap());
+        assert!(
+            default_collection
+                .create_index(
+                    "new_index1",
+                    &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField"]]"#),
+                )
+                .unwrap()
+        );
 
         let index1 = default_collection.get_index("new_index1").unwrap();
         assert_eq!(index1.name(), "new_index1");
@@ -129,12 +131,14 @@ fn get_index() {
             .create_collection(String::from("coll"), String::from("scop"))
             .unwrap();
 
-        assert!(new_coll
-            .create_index(
-                "new_index2",
-                &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField2"]]"#),
-            )
-            .unwrap());
+        assert!(
+            new_coll
+                .create_index(
+                    "new_index2",
+                    &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField2"]]"#),
+                )
+                .unwrap()
+        );
 
         let index2 = new_coll.get_index("new_index2").unwrap();
         assert_eq!(index2.name(), "new_index2");
@@ -152,12 +156,13 @@ fn get_index_name_from_explain(explain: &str) -> Option<String> {
 #[test]
 fn full_index() {
     utils::with_db(|db| {
-        assert!(db
-            .create_index(
+        assert!(
+            db.create_index(
                 "new_index",
                 &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField"]]"#),
             )
-            .unwrap());
+            .unwrap()
+        );
 
         // Check index creation
         let value = db.get_index_names().iter().next().unwrap();
@@ -204,15 +209,16 @@ fn full_index() {
 #[test]
 fn partial_index() {
     utils::with_db(|db| {
-        assert!(db
-            .create_index(
+        assert!(
+            db.create_index(
                 "new_index",
                 &ValueIndexConfiguration::new(
                     QueryLanguage::JSON,
                     r#"{"WHAT": [[".id"]], "WHERE": ["=", [".someField"], "someValue"]}"#
                 ),
             )
-            .unwrap());
+            .unwrap()
+        );
 
         // Check index creation
         let value = db.get_index_names().iter().next().unwrap();
@@ -310,9 +316,11 @@ fn array_index() {
         let index_configuration =
             ArrayIndexConfiguration::new(QueryLanguage::N1QL, "contacts[].phones", "type").unwrap();
 
-        assert!(default_collection
-            .create_array_index("two_levels", &index_configuration,)
-            .unwrap());
+        assert!(
+            default_collection
+                .create_array_index("two_levels", &index_configuration,)
+                .unwrap()
+        );
 
         let query = Query::new(
             db,

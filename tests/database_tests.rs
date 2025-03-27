@@ -170,9 +170,10 @@ fn db_encryption_key() {
     {
         let mut db = Database::open(utils::DB_NAME, Some(cfg_no_encryption.clone())).unwrap();
         let mut doc = Document::new_with_id("foo");
-        assert!(db
-            .save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
-            .is_ok());
+        assert!(
+            db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
+                .is_ok()
+        );
     }
 
     // Assert database can only be opened with no ecryption & doc can be retrieved, then add encryption

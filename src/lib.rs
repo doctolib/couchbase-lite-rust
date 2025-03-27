@@ -145,11 +145,13 @@ pub fn dump_instances() {
 //////// REFCOUNT SUPPORT (INTERNAL)
 
 pub(crate) unsafe fn retain<T>(cbl_ref: *mut T) -> *mut T {
-    CBL_Retain(cbl_ref.cast::<CBLRefCounted>()).cast::<T>()
+    unsafe { CBL_Retain(cbl_ref.cast::<CBLRefCounted>()).cast::<T>() }
 }
 
 pub(crate) unsafe fn release<T>(cbl_ref: *mut T) {
-    CBL_Release(cbl_ref.cast::<CBLRefCounted>());
+    unsafe {
+        CBL_Release(cbl_ref.cast::<CBLRefCounted>());
+    }
 }
 
 //////// ANDROID INIT
