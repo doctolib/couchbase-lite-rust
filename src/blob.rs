@@ -231,11 +231,7 @@ impl std::io::Write for BlobWriter<'_> {
                     data.len(),
                     err,
                 );
-                if ok {
-                    data.len() as i32
-                } else {
-                    -1
-                }
+                if ok { data.len() as i32 } else { -1 }
             })
         }
     }

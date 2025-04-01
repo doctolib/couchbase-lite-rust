@@ -23,9 +23,13 @@
 // - https://doc.rust-lang.org/cargo/reference/build-scripts.html
 
 #[cfg(all(not(feature = "community"), not(feature = "enterprise")))]
-compile_error!("You need to have one the following features activated: community, enterprise");
+compile_error!(
+    "You need to have at least one the following features activated: community, enterprise"
+);
 #[cfg(all(feature = "community", feature = "enterprise"))]
-compile_error!("You need to have one the following features activated: community, enterprise");
+compile_error!(
+    "You need to have at most one the following features activated: community, enterprise"
+);
 
 extern crate bindgen;
 extern crate fs_extra;

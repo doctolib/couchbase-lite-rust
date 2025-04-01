@@ -149,9 +149,11 @@ unsafe extern "C" fn invoke_log_callback(
     c_level: CBLLogLevel,
     msg: FLString,
 ) {
-    if let Some(cb) = LOG_CALLBACK {
-        let domain = Domain::from_u8(c_domain).unwrap_or(Domain::None);
-        let level = Level::from_u8(c_level).unwrap_or(Level::None);
-        cb(domain, level, msg.as_str().unwrap_or("Empty error"));
+    unsafe {
+        if let Some(cb) = LOG_CALLBACK {
+            let domain = Domain::from_u8(c_domain).unwrap_or(Domain::None);
+            let level = Level::from_u8(c_level).unwrap_or(Level::None);
+            cb(domain, level, msg.as_str().unwrap_or("Empty error"));
+        }
     }
 }
