@@ -9,7 +9,6 @@ edition = "2024"
 license-file = "libcblite_enterprise/LICENSE.txt"
 keywords = ["couchbase"]
 categories = ["database"]
-publish = ["couchbase-lite-rust"]
 
 [dependencies]
 enum_primitive = "0.1.1"
