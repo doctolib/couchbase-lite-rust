@@ -1,7 +1,6 @@
 [package]
 name = "couchbase_lite"
 description = "Rust bindings for Couchbase Lite C"
-
 # The first three numbers correspond to the Couchbase Lite C release, the fourth number corresponds to the Rust release
 version = "3.2.1-0"
 
@@ -13,10 +12,12 @@ categories = ["database"]
 publish = ["couchbase-lite-rust"]
 
 [dependencies]
-enum_primitive = "*"
-tempdir = "*"
-lazy_static = "1.4.0"
-regex = "1.10.4"
+enum_primitive = "0.1.1"
+
+[dev-dependencies]
+lazy_static = "1.5.0"
+regex = "1.11.1"
+tempdir = "0.3.7"
 
 [dev-dependencies.cargo-husky]
 version = "1"
