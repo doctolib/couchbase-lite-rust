@@ -114,7 +114,7 @@ fn get_index() {
             default_collection
                 .create_index(
                     "new_index1",
-                    &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField"]]"#),
+                    &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField"]]"#, ""),
                 )
                 .unwrap()
         );
@@ -135,7 +135,7 @@ fn get_index() {
             new_coll
                 .create_index(
                     "new_index2",
-                    &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField2"]]"#),
+                    &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField2"]]"#, ""),
                 )
                 .unwrap()
         );
@@ -159,7 +159,7 @@ fn full_index() {
         assert!(
             db.create_index(
                 "new_index",
-                &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField"]]"#),
+                &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField"]]"#, ""),
             )
             .unwrap()
         );
@@ -214,7 +214,8 @@ fn partial_index() {
                 "new_index",
                 &ValueIndexConfiguration::new(
                     QueryLanguage::JSON,
-                    r#"{"WHAT": [[".id"]], "WHERE": ["=", [".someField"], "someValue"]}"#
+                    r#"{"WHAT": [[".id"]], "WHERE": ["=", [".someField"], "someValue"]}"#,
+                    ""
                 ),
             )
             .unwrap()

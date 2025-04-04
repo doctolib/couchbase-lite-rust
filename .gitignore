@@ -2,6 +2,7 @@
 Cargo.lock
 
 .vscode
+.idea
 
 # MacOS directory conf
 .DS_Store

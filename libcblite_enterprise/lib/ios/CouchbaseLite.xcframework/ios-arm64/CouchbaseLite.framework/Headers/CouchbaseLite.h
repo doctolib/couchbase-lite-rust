@@ -25,6 +25,7 @@
 #include <CouchbaseLite/CBLDocument.h>
 #include <CouchbaseLite/CBLEncryptable.h>
 #include <CouchbaseLite/CBLLog.h>
+#include <CouchbaseLite/CBLLogSinks.h>
 #include <CouchbaseLite/CBLPlatform.h>
 #include <CouchbaseLite/CBLPrediction.h>
 #include <CouchbaseLite/CBLQuery.h>
