@@ -30,12 +30,15 @@ impl ValueIndexConfiguration {
     /// You must indicate the query language used in the expressions.
     /// The expressions describe each coloumn of the index. The expressions could be specified
     /// in a JSON Array or in N1QL syntax using comma delimiter.
-    pub fn new(query_language: QueryLanguage, expressions: &str) -> Self {
-        let slice = from_str(expressions);
+    /// The where clause is optional and is a predicate expression defining conditions for indexing documents.
+    pub fn new(query_language: QueryLanguage, expressions: &str, where_: &str) -> Self {
+        let expressions_slices = from_str(expressions);
+        let where_slices = from_str(where_);
         Self {
             cbl_ref: CBLValueIndexConfiguration {
                 expressionLanguage: query_language as u32,
-                expressions: slice.get_ref(),
+                expressions: expressions_slices.get_ref(),
+                where_: where_slices.get_ref(),
             },
         }
     }
