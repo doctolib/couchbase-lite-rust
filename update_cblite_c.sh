@@ -35,7 +35,7 @@ cd $scriptDir
 function help() {
     echo "Download & Setup new CBlite packages"
     echo
-    echo "  -v  CBlite version (ie. 3.2.1)"
+    echo "  -v  CBlite version (ie. 3.2.2)"
     echo "  -h  print this help"
 }
 
@@ -105,6 +105,7 @@ do
         local url="https://packages.couchbase.com/releases/couchbase-lite-c/${version}/couchbase-lite-c-${variant}-${version}-${platformName}"
         local file="${tmpDownloadFolder}/${platformName}"
 
+        echo "Downloading ${platformName} package from ${url}"
         wget --quiet --show-progress --output-document "${file}" "${url}"
     }
 
@@ -112,8 +113,6 @@ do
 
     for platform in "${!platforms[@]}"
     do
-        echo "Downloading ${platform} package"
-
         platformName=${platforms[$platform]}
         download $platformName $variant
     done
@@ -133,7 +132,8 @@ do
 
     for platform in "${!platforms[@]}"
     do
-        echo "Unzipping ${platform} package"
+        platformName=${platforms[$platform]}
+        echo "Unzipping ${platformName} package"
 
         fileName=${platforms[$platform]}
         zippedPath="$tmpDownloadFolder/$fileName"
@@ -162,7 +162,8 @@ do
 
     for platform in "${!platforms[@]}"
     do
-        echo "Packaging ${platform}"
+        platformName=${platforms[$platform]}
+        echo "Packaging ${platformName}"
 
         unzipPlatformFolder="${tmpUnzipFolder}/$platform"
 

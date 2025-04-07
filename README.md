@@ -47,10 +47,10 @@ The different releases can be found in [this page][CBL_DOWNLOAD_PAGE].
 When a new C release is available, a new Rust release must be created. Running the following script will download and setup the libraries locally:
 
 ```shell
-$ ./update_cblite_c.sh -v 3.2.1
+$ ./update_cblite_c.sh -v 3.2.2
 ```
 
-If the script fails on MacOS, you might need to install wget or a recent bash version:
+If the script fails (for example `declare: -A: invalid option`, you'll need bash >= version 4) on MacOS, you might need to install wget or a recent bash version:
 
 ```shell
 $ brew install wget
@@ -119,7 +119,7 @@ $ LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nigh
 
 [CBL_DOCS]: https://docs.couchbase.com/couchbase-lite/current/introduction.html
 
-[CBL_API_REFERENCE]: https://docs.couchbase.com/mobile/3.2.1/couchbase-lite-c/C/html/modules.html
+[CBL_API_REFERENCE]: https://docs.couchbase.com/mobile/3.2.2/couchbase-lite-c/C/html/modules.html
 
 [CBL_EDITIONS_DIFF]: https://www.couchbase.com/products/editions/
 

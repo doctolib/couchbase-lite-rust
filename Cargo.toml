@@ -2,7 +2,7 @@
 name = "couchbase_lite"
 description = "Rust bindings for Couchbase Lite C"
 # The first three numbers correspond to the Couchbase Lite C release, the fourth number corresponds to the Rust release
-version = "3.2.1-0"
+version = "3.2.2-0"
 
 edition = "2024"
 
