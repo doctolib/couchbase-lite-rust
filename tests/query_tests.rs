@@ -114,7 +114,7 @@ fn get_index() {
             default_collection
                 .create_index(
                     "new_index1",
-                    &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField"]]"#, ""),
+                    &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField"]]"#, None),
                 )
                 .unwrap()
         );
@@ -135,7 +135,11 @@ fn get_index() {
             new_coll
                 .create_index(
                     "new_index2",
-                    &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField2"]]"#, ""),
+                    &ValueIndexConfiguration::new(
+                        QueryLanguage::JSON,
+                        r#"[[".someField2"]]"#,
+                        None
+                    ),
                 )
                 .unwrap()
         );
@@ -159,7 +163,7 @@ fn full_index() {
         assert!(
             db.create_index(
                 "new_index",
-                &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField"]]"#, ""),
+                &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField"]]"#, None),
             )
             .unwrap()
         );
@@ -215,7 +219,55 @@ fn partial_index() {
                 &ValueIndexConfiguration::new(
                     QueryLanguage::JSON,
                     r#"{"WHAT": [[".id"]], "WHERE": ["=", [".someField"], "someValue"]}"#,
-                    ""
+                    None
+                ),
+            )
+            .unwrap()
+        );
+
+        // Check index creation
+        let value = db.get_index_names().iter().next().unwrap();
+        let name = value.as_string().unwrap();
+        assert_eq!(name, "new_index");
+
+        // Check index used
+        let query = Query::new(
+            db,
+            QueryLanguage::N1QL,
+            "select _.* from _ where _.id = 'id' and _.someField='someValue'",
+        )
+        .expect("create query");
+
+        let index = get_index_name_from_explain(&query.explain().unwrap()).unwrap();
+        assert_eq!(index, "new_index");
+
+        // Check index not used
+        let query = Query::new(
+            db,
+            QueryLanguage::N1QL,
+            "select _.* from _ where _.id = 'id' and _.someField='notSomeValue'",
+        )
+        .expect("create query");
+
+        let index = Regex::new(r"USING INDEX (\w+) ")
+            .unwrap()
+            .captures(&query.explain().unwrap())
+            .map(|c| c.get(1).unwrap().as_str().to_string());
+
+        assert!(index.is_none());
+    });
+}
+
+#[test]
+fn partial_index_with_condition_field() {
+    utils::with_db(|db| {
+        assert!(
+            db.create_index(
+                "new_index",
+                &ValueIndexConfiguration::new(
+                    QueryLanguage::JSON,
+                    r#"[[".id"]]"#,
+                    Some(r#"["=", [".someField"], "someValue"]"#)
                 ),
             )
             .unwrap()

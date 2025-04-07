@@ -31,9 +31,9 @@ impl ValueIndexConfiguration {
     /// The expressions describe each coloumn of the index. The expressions could be specified
     /// in a JSON Array or in N1QL syntax using comma delimiter.
     /// The where clause is optional and is a predicate expression defining conditions for indexing documents.
-    pub fn new(query_language: QueryLanguage, expressions: &str, where_: &str) -> Self {
+    pub fn new(query_language: QueryLanguage, expressions: &str, where_: Option<&str>) -> Self {
         let expressions_slices = from_str(expressions);
-        let where_slices = from_str(where_);
+        let where_slices = from_str(where_.unwrap_or(""));
         Self {
             cbl_ref: CBLValueIndexConfiguration {
                 expressionLanguage: query_language as u32,
