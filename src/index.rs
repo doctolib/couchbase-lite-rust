@@ -33,7 +33,7 @@ impl ValueIndexConfiguration {
     /// The where clause is optional and is a predicate expression defining conditions for indexing documents.
     pub fn new(query_language: QueryLanguage, expressions: &str, where_: Option<&str>) -> Self {
         let expressions_slices = from_str(expressions);
-        let where_slices = from_str(where_.unwrap_or(""));
+        let where_slices = from_str(where_.unwrap_or_default());
         Self {
             cbl_ref: CBLValueIndexConfiguration {
                 expressionLanguage: query_language as u32,
