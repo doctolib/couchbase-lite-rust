@@ -11,6 +11,7 @@ keywords = ["couchbase"]
 categories = ["database"]
 
 [dependencies]
+bitflags = "2.9.0"
 enum_primitive = "0.1.1"
 
 [dev-dependencies]

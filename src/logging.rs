@@ -15,14 +15,14 @@
 // limitations under the License.
 //
 
+use bitflags::bitflags;
 use crate::c_api::{
-    CBLLogDomain, CBLLogLevel, CBLLog_SetCallback, CBLLog_SetCallbackLevel, CBLLog_SetConsoleLevel,
-    CBL_Log, FLString,
+    kCBLLogDomainMaskAll, kCBLLogDomainMaskDatabase, kCBLLogDomainMaskNetwork,
+    kCBLLogDomainMaskQuery, kCBLLogDomainMaskReplicator, CBLConsoleLogSink, CBLCustomLogSink,
+    CBLLogDomain, CBLLogLevel, CBLLogSinks_SetConsole, CBLLogSinks_SetCustom, FLString,
 };
 
 use enum_primitive::FromPrimitive;
-use std::fmt;
-use std::ffi::CString;
 
 enum_from_primitive! {
     /** Logging domains: subsystems that generate log messages. */
@@ -50,94 +50,63 @@ enum_from_primitive! {
     }
 }
 
+bitflags! {
+    /** A bitmask representing a set of logging domains.
+     *
+     *  Use this bitmask to specify one or more logging domains by combining the
+     *  constants with the bitwise OR operator (`|`). This is helpful for enabling
+     *  or filtering logs for specific domains. */
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct DomainMask: u32 {
+        const DATABASE   = kCBLLogDomainMaskDatabase;
+        const QUERY      = kCBLLogDomainMaskQuery;
+        const REPLICATOR = kCBLLogDomainMaskReplicator;
+        const NETWORK    = kCBLLogDomainMaskNetwork;
+        const ALL        = kCBLLogDomainMaskAll;
+    }
+}
+
+/** Console log sink configuration for logging to the cosole. */
+pub struct ConsoleLogSink {
+    // The minimum level of message to write (Required).
+    pub level: Level,
+    // Bitmask for enabled log domains.
+    pub domains: DomainMask,
+}
+
 pub type LogCallback = Option<fn(Domain, Level, &str)>;
 
-/** Sets the detail level of console logging.
-Only messages whose level is ≥ the given level will be logged to the console.
-Default value is Info. */
-pub fn set_console_level(level: Level) {
-    unsafe { CBLLog_SetConsoleLevel(level as u8) }
+/** Custom log sink configuration for logging to a user-defined callback. */
+pub struct CustomLogSink {
+    // The minimum level of message to write (Required).
+    pub level: Level,
+    // Custom log callback (Required).
+    pub callback: LogCallback,
+    // Bitmask for enabled log domains.
+    pub domains: DomainMask,
 }
 
-/** Sets the detail level of logging to the registered callback (if any.)
-Only messages whose level is ≥ the given level will be logged to the callback.
-Default value is Info. */
-pub fn set_callback_level(level: Level) {
-    unsafe { CBLLog_SetCallbackLevel(level as u8) }
-}
-
-/** Registers a function that will receive log messages. */
-pub fn set_callback(callback: LogCallback) {
+/** Set the console log sink. To disable the console log sink, set the log level to None. */
+pub fn set_console_log_sink(log_sink: ConsoleLogSink) {
     unsafe {
-        LOG_CALLBACK = callback;
-        if callback.is_some() {
-            CBLLog_SetCallback(Some(invoke_log_callback));
-        } else {
-            CBLLog_SetCallback(None);
-        }
+        CBLLogSinks_SetConsole(CBLConsoleLogSink {
+            level: log_sink.level as u8,
+            domains: log_sink.domains.bits() as u16,
+        })
     }
 }
 
-/** Writes a log message. */
-pub fn write(domain: Domain, level: Level, message: &str) {
+/** Set the custom log sink. To disable the custom log sink, set the log level to None. */
+pub fn set_custom_log_sink(log_sink: CustomLogSink) {
     unsafe {
-        let cstr = CString::new(message).unwrap();
-        CBL_Log(domain as u8, level as u8, cstr.as_ptr());
+        LOG_CALLBACK = log_sink.callback;
 
-        // CBL_Log doesn't invoke the callback, so do it manually:
-        if let Some(callback) = LOG_CALLBACK {
-            //if  CBLLog_WillLogToConsole(domain as u8, level as u8) {
-            callback(domain, level, message);
-            //}
-        }
+        CBLLogSinks_SetCustom(CBLCustomLogSink {
+            level: log_sink.level as u8,
+            callback: Some(invoke_log_callback),
+            domains: log_sink.domains.bits() as u16,
+        })
     }
-}
-
-/** Writes a log message using the given format arguments. */
-pub fn write_args(domain: Domain, level: Level, args: fmt::Arguments) {
-    write(domain, level, &format!("{:?}", args));
-}
-
-//////// LOGGING MACROS:
-
-/// A macro that writes a formatted Error-level log message.
-#[macro_export]
-macro_rules! error {
-    ($($arg:tt)*) => ($crate::logging::write_args(
-        $crate::logging::Domain::Database, $crate::logging::Level::Error,
-        format_args!($($arg)*)));
-}
-
-/// A macro that writes a formatted Warning-level log message.
-#[macro_export]
-macro_rules! warn {
-    ($($arg:tt)*) => ($crate::logging::write_args(
-        $crate::logging::Domain::Database, $crate::logging::Level::Warning,
-        format_args!($($arg)*)));
-}
-
-/// A macro that writes a formatted Info-level log message.
-#[macro_export]
-macro_rules! info {
-    ($($arg:tt)*) => ($crate::logging::write_args(
-        $crate::logging::Domain::Database, $crate::logging::Level::Info,
-        format_args!($($arg)*)));
-}
-
-/// A macro that writes a formatted Verbose-level log message.
-#[macro_export]
-macro_rules! verbose {
-    ($($arg:tt)*) => ($crate::logging::write_args(
-        $crate::logging::Domain::Database, $crate::logging::Level::Verbose,
-        format_args!($($arg)*)));
-}
-
-/// A macro that writes a formatted Debug-level log message.
-#[macro_export]
-macro_rules! debug {
-    ($($arg:tt)*) => ($crate::logging::write_args(
-        $crate::logging::Domain::Database, $crate::logging::Level::Debug,
-        format_args!($($arg)*)));
 }
 
 //////// INTERNALS:

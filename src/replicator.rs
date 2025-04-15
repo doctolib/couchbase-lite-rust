@@ -47,7 +47,7 @@ use crate::{
 };
 #[cfg(feature = "enterprise")]
 use crate::{
-    CouchbaseLiteError, ErrorCode, error,
+    CouchbaseLiteError, ErrorCode,
     c_api::{
         CBLEndpoint_CreateWithLocalDB, FLSlice, FLSliceResult, FLSliceResult_New, FLSlice_Copy,
         FLStringResult,
@@ -395,14 +395,12 @@ pub extern "C" fn c_default_collection_property_encryptor(
                     Err(err) => {
                         match err {
                             EncryptionError::Temporary => {
-                                error!("Encryption callback returned with transient error");
                                 error = Error {
                                     code: ErrorCode::WebSocket(503),
                                     internal_info: None,
                                 };
                             }
                             EncryptionError::Permanent => {
-                                error!("Encryption callback returned with non transient error");
                                 error = Error::cbl_error(CouchbaseLiteError::Crypto);
                             }
                         }
@@ -411,7 +409,6 @@ pub extern "C" fn c_default_collection_property_encryptor(
                     }
                 });
         } else {
-            error!("Encryption input is None");
             error = Error::cbl_error(CouchbaseLiteError::Crypto);
         }
 
@@ -478,14 +475,12 @@ pub extern "C" fn c_collection_property_encryptor(
                     Err(err) => {
                         match err {
                             EncryptionError::Temporary => {
-                                error!("Encryption callback returned with transient error");
                                 error = Error {
                                     code: ErrorCode::WebSocket(503),
                                     internal_info: None,
                                 };
                             }
                             EncryptionError::Permanent => {
-                                error!("Encryption callback returned with non transient error");
                                 error = Error::cbl_error(CouchbaseLiteError::Crypto);
                             }
                         }
@@ -494,7 +489,6 @@ pub extern "C" fn c_collection_property_encryptor(
                     }
                 });
         } else {
-            error!("Encryption input is None");
             error = Error::cbl_error(CouchbaseLiteError::Crypto);
         }
 
@@ -556,14 +550,12 @@ pub extern "C" fn c_default_collection_property_decryptor(
                     Err(err) => {
                         match err {
                             EncryptionError::Temporary => {
-                                error!("Decryption callback returned with transient error");
                                 error = Error {
                                     code: ErrorCode::WebSocket(503),
                                     internal_info: None,
                                 };
                             }
                             EncryptionError::Permanent => {
-                                error!("Decryption callback returned with non transient error");
                                 error = Error::cbl_error(CouchbaseLiteError::Crypto);
                             }
                         }
@@ -572,7 +564,6 @@ pub extern "C" fn c_default_collection_property_decryptor(
                     }
                 });
         } else {
-            error!("Decryption input is None");
             error = Error::cbl_error(CouchbaseLiteError::Crypto);
         }
 
@@ -639,14 +630,12 @@ pub extern "C" fn c_collection_property_decryptor(
                     Err(err) => {
                         match err {
                             EncryptionError::Temporary => {
-                                error!("Decryption callback returned with transient error");
                                 error = Error {
                                     code: ErrorCode::WebSocket(503),
                                     internal_info: None,
                                 };
                             }
                             EncryptionError::Permanent => {
-                                error!("Decryption callback returned with non transient error");
                                 error = Error::cbl_error(CouchbaseLiteError::Crypto);
                             }
                         }
@@ -655,7 +644,6 @@ pub extern "C" fn c_collection_property_decryptor(
                     }
                 });
         } else {
-            error!("Decryption input is None");
             error = Error::cbl_error(CouchbaseLiteError::Crypto);
         }
 
