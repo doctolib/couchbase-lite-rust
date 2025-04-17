@@ -10,6 +10,7 @@ use std::{
 };
 #[cfg(feature = "enterprise")]
 use std::collections::HashMap;
+use couchbase_lite::logging::CustomLogSink;
 
 pub const DB_NAME: &str = "test_db";
 
@@ -26,15 +27,27 @@ fn logger(domain: logging::Domain, level: logging::Level, message: &str) {
 }
 
 pub fn init_logging() {
-    logging::set_callback(Some(logger));
-    logging::set_callback_level(logging::Level::Verbose);
-    logging::set_console_level(logging::Level::None);
+    logging::set_custom_log_sink(CustomLogSink {
+        level: logging::Level::Verbose,
+        callback: Some(logger),
+        domains: logging::DomainMask::ALL,
+    });
+    logging::set_console_log_sink(logging::ConsoleLogSink {
+        level: logging::Level::None,
+        domains: logging::DomainMask::ALL,
+    });
 }
 
 pub struct LeakChecker {
     is_checking: bool,
     start_instance_count: usize,
     end_instance_count: usize,
+}
+
+impl Default for LeakChecker {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LeakChecker {
@@ -58,12 +71,12 @@ impl LeakChecker {
 impl Drop for LeakChecker {
     fn drop(&mut self) {
         if self.is_checking {
-            info!("Checking if Couchbase Lite objects were leaked by this test");
+            println!("Checking if Couchbase Lite objects were leaked by this test");
             self.end_instance_count = instance_count();
 
             if self.start_instance_count != self.end_instance_count {
-                info!("Leaks detected :-(");
-                info!(
+                println!("Leaks detected :-(");
+                println!(
                     "Instances before: {} | Instances after: {}",
                     self.start_instance_count, self.end_instance_count
                 );
@@ -73,7 +86,7 @@ impl Drop for LeakChecker {
                 // default. Looking for changes in the `instance_count()` is intrinsically not thread safe.
                 // Either run tests with `cargo test -- --test-threads`, or turn off `LEAK_CHECKS`.
             } else {
-                info!("All good :-)");
+                println!("All good :-)");
             }
         }
     }
