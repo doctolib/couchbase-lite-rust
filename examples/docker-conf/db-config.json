@@ -1,0 +1,8 @@
+{
+  "import_docs": true,
+  "enable_shared_bucket_access": true,
+  "bucket": "my-bucket",
+  "num_index_replicas": 0,
+  "revs_limit": 20,
+  "allow_conflicts": false
+}
