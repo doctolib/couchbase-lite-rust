@@ -15,6 +15,11 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
+      - name: Install deps
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends libpcsclite-dev libev-dev libevent-dev libpcsclite-dev pkg-config clang llvm
+
       - name: Install rust
         uses: dtolnay/rust-toolchain@888c2e1ea69ab0d4330cbf0af1ecc7b68f368cc1 # v1
         with:
@@ -27,4 +32,3 @@ jobs:
           set +e
           # shellcheck disable=SC2046
           cargo clippy --color always --features=${{ matrix.version }}
-          exit "${PIPESTATUS[0]}"
