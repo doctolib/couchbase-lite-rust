@@ -28,9 +28,9 @@ use crate::{
 /// * The original key will be prefixed with 'encrypted$'.
 ///
 /// * The transformed Encryptable dictionary will contain `alg` property indicating
-///     the encryption algorithm, `ciphertext` property whose value is a base-64 string of the
-///     encrypted value, and optionally `kid` property indicating the encryption key identifier
-///     if specified when returning the result of PropertyEncryptor callback call.
+///   the encryption algorithm, `ciphertext` property whose value is a base-64 string of the
+///   encrypted value, and optionally `kid` property indicating the encryption key identifier
+///   if specified when returning the result of PropertyEncryptor callback call.
 ///
 /// For security reason, a document that contains Encryptable dictionaries will fail
 /// to push if their value cannot be encrypted including
