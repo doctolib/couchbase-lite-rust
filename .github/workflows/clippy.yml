@@ -28,6 +28,5 @@ jobs:
       - name: Clippy check
         shell: bash
         run: |
-          set +e
           # shellcheck disable=SC2046
           cargo clippy --color always --features=${{ matrix.version }}
