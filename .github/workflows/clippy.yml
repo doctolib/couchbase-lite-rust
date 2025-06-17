@@ -4,7 +4,6 @@ on: push
 
 env:
   CARGO_TERM_COLOR: always
-  LIBCLANG_PATH: /usr/lib/llvm-14/lib/
 
 jobs:
   clippy_check:
@@ -14,9 +13,20 @@ jobs:
         version: [community, enterprise]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - run: rustup component add clippy
-      - uses: actions-rs/clippy-check@v1
+
+      - name: Install deps
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends libclang-dev
+
+      - name: Install rust
+        uses: dtolnay/rust-toolchain@888c2e1ea69ab0d4330cbf0af1ecc7b68f368cc1 # v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          name: Clippy
-          args: --features=${{ matrix.version }}
+          toolchain: stable
+          components: clippy
+
+      - name: Clippy check
+        shell: bash
+        run: |
+          # shellcheck disable=SC2046
+          cargo clippy --color always --features=${{ matrix.version }}
