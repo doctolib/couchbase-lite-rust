@@ -17,9 +17,10 @@
 
 use bitflags::bitflags;
 use crate::c_api::{
-    kCBLLogDomainMaskAll, kCBLLogDomainMaskDatabase, kCBLLogDomainMaskNetwork,
-    kCBLLogDomainMaskQuery, kCBLLogDomainMaskReplicator, CBLConsoleLogSink, CBLCustomLogSink,
-    CBLLogDomain, CBLLogLevel, CBLLogSinks_SetConsole, CBLLogSinks_SetCustom, FLString,
+    kCBLLogDomainMaskAll, kCBLLogDomainMaskDatabase, kCBLLogDomainMaskListener,
+    kCBLLogDomainMaskNetwork, kCBLLogDomainMaskQuery, kCBLLogDomainMaskReplicator,
+    CBLConsoleLogSink, CBLCustomLogSink, CBLLogDomain, CBLLogLevel, CBLLogSinks_SetConsole,
+    CBLLogSinks_SetCustom, FLString,
 };
 
 use enum_primitive::FromPrimitive;
@@ -32,6 +33,7 @@ enum_from_primitive! {
         Query,
         Replicator,
         Network,
+        Listener,
         None
     }
 }
@@ -62,6 +64,7 @@ bitflags! {
         const QUERY      = kCBLLogDomainMaskQuery;
         const REPLICATOR = kCBLLogDomainMaskReplicator;
         const NETWORK    = kCBLLogDomainMaskNetwork;
+        const LISTENER   = kCBLLogDomainMaskListener;
         const ALL        = kCBLLogDomainMaskAll;
     }
 }
