@@ -18,10 +18,8 @@ jobs:
       - name: Install rust
         uses: dtolnay/rust-toolchain@888c2e1ea69ab0d4330cbf0af1ecc7b68f368cc1 # v1
         with:
-          toolchain: ${{ env.RUST_VERSION }}
-          targets: ${{ inputs.target }}
-
-      - run: rustup component add clippy
+          toolchain: stable
+          components: clippy
 
       - name: Clippy check
         shell: bash
