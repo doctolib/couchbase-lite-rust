@@ -748,7 +748,7 @@ pub struct ReplicatorConfiguration {
     /** Specify the replicator to accept only self-signed certs. Any non-self-signed certs will be rejected
     to avoid accidentally using this mode with the non-self-signed certs in production. */
     #[cfg(feature = "enterprise")]
-    accept_only_self_signed_server_certificate: bool,
+    pub accept_only_self_signed_server_certificate: bool,
 }
 
 //======== LIFECYCLE
