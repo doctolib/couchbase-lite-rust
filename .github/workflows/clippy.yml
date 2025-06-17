@@ -17,7 +17,7 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends pkg-config clang llvm llvm-dev libclang-dev
+          sudo apt-get install -y --no-install-recommends clang llvm llvm-dev libclang-dev
 
       - name: Install rust
         uses: dtolnay/rust-toolchain@888c2e1ea69ab0d4330cbf0af1ecc7b68f368cc1 # v1
