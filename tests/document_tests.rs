@@ -2,7 +2,7 @@ extern crate core;
 extern crate couchbase_lite;
 
 use self::couchbase_lite::*;
-use std::time::Duration;
+use std::{thread::sleep, time::Duration};
 use utils::{init_logging, LeakChecker};
 
 pub mod utils;
@@ -296,12 +296,36 @@ fn database_document_expiration() {
         let mut document = Document::new_with_id("foo");
         db.save_document_with_concurency_control(&mut document, ConcurrencyControl::FailOnConflict)
             .expect("save_document");
+
+        // No expiration by default
         let expiration = db.document_expiration("foo").expect("document_expiration");
         assert!(expiration.is_none());
-        db.set_document_expiration("foo", Some(Timestamp(1000000000)))
+
+        // Set expiration in 2 seconds
+        let expiration = Timestamp::now().add(Duration::from_secs(2));
+        db.set_document_expiration("foo", Some(expiration))
             .expect("set_document_expiration");
-        let expiration = db.document_expiration("foo").expect("document_expiration");
-        assert!(expiration.is_some());
-        assert_eq!(expiration.unwrap().0, 1000000000);
+
+        // Check expiration is set up
+        let doc_expiration = db.document_expiration("foo").expect("document_expiration");
+        assert_eq!(doc_expiration.unwrap(), expiration);
+
+        // Check the document is still present after 1 second
+        sleep(Duration::from_secs(1));
+        assert!(db.get_document("foo").is_ok());
+
+        // Move to expiration time
+        sleep(Duration::from_secs(1));
+
+        // Check documents disappears
+        for _ in 0..5 {
+            let doc = db.get_document("foo");
+            if doc.is_err() || doc.unwrap().is_deleted() {
+                return;
+            }
+
+            sleep(Duration::from_secs(1));
+        }
+        panic!("The document is still present 10 seconds after its expiration time");
     });
 }

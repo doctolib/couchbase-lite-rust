@@ -291,7 +291,7 @@ impl Value {
             if t == 0 {
                 return None;
             }
-            Some(Timestamp(t))
+            Some(Timestamp::new(t))
         }
     }
 
