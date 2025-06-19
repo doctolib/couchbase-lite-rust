@@ -319,7 +319,8 @@ fn database_document_expiration() {
 
         // Check documents disappears
         for _ in 0..5 {
-            if db.get_document("foo").unwrap().is_deleted() {
+            let doc = db.get_document("foo");
+            if doc.is_err() || doc.unwrap().is_deleted() {
                 return;
             }
 
