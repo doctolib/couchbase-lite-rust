@@ -236,7 +236,7 @@ impl Database {
         }
     }
 
-    /// Returns the time, if any, at which a given document will expire and be purged.
+    /// Returns the time, if any, at which a given document will expire and be purged in milliseconds since the Unix epoch (1/1/1970.).
     /// Documents don't normally expire; you have to call `set_document_expiration`
     /// to set a document's expiration time.
     #[deprecated(note = "please use `document_expiration` on default collection instead")]
@@ -250,7 +250,7 @@ impl Database {
             );
             match exp {
                 0 => Ok(None),
-                _ if exp > 0 => Ok(Some(Timestamp(exp))),
+                _ if exp > 0 => Ok(Some(Timestamp::new(exp))),
                 _ => failure(error),
             }
         }
@@ -260,7 +260,7 @@ impl Database {
     #[deprecated(note = "please use `set_document_expiration` on default collection instead")]
     pub fn set_document_expiration(&mut self, doc_id: &str, when: Option<Timestamp>) -> Result<()> {
         let exp: i64 = match when {
-            Some(Timestamp(n)) => n,
+            Some(Timestamp { timestamp }) => timestamp,
             _ => 0,
         };
         unsafe {
@@ -448,7 +448,7 @@ impl Collection {
         }
     }
 
-    /// Returns the time, if any, at which a given document will expire and be purged.
+    /// Returns the time, if any, at which a given document will expire and be purged in milliseconds since the Unix epoch (1/1/1970.).
     /// Documents don't normally expire; you have to call set_document_expiration
     /// to set a document's expiration time.
     pub fn document_expiration(&self, doc_id: &str) -> Result<Option<Timestamp>> {
@@ -461,16 +461,16 @@ impl Collection {
             );
             match exp {
                 0 => Ok(None),
-                _ if exp > 0 => Ok(Some(Timestamp(exp))),
+                _ if exp > 0 => Ok(Some(Timestamp::new(exp))),
                 _ => failure(error),
             }
         }
     }
 
-    /// Sets or clears the expiration time of a document.
+    /// Sets or clears the expiration time of a document in milliseconds since the Unix epoch (1/1/1970.).
     pub fn set_document_expiration(&mut self, doc_id: &str, when: Option<Timestamp>) -> Result<()> {
         let exp: i64 = match when {
-            Some(Timestamp(n)) => n,
+            Some(Timestamp { timestamp }) => timestamp,
             _ => 0,
         };
         unsafe {
