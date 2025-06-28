@@ -21,7 +21,7 @@ jobs:
         with:
             toolchain: nightly
             components: rustfmt, clippy
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: doctolib/actions/checkout@429fae9c3fefa82b9a7fc0223edfaecc7234c787 # checkout-v0.1.0
       - name: Run tests
         run: cargo test --features=${{ matrix.version }} --verbose
       - name: Run tests with Couchbase Lite C leak check
