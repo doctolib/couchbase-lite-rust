@@ -92,7 +92,7 @@ impl Timestamp {
     }
 
     /// Create a Timestamp from milliseconds since the Unix epoch (1/1/1970.)
-    pub(crate) fn new(milliseconds_from_epoch: i64) -> Self {
+    pub fn new(milliseconds_from_epoch: i64) -> Self {
         Timestamp {
             timestamp: milliseconds_from_epoch,
         }
