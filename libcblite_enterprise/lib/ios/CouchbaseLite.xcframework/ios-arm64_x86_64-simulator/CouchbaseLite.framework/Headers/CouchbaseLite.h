@@ -32,5 +32,7 @@
 #include <CouchbaseLite/CBLQueryIndex.h>
 #include <CouchbaseLite/CBLQueryIndexTypes.h>
 #include <CouchbaseLite/CBLQueryTypes.h>
+#include <CouchbaseLite/CBLTLSIdentity.h>
 #include <CouchbaseLite/CBLReplicator.h>
 #include <CouchbaseLite/CBLScope.h>
+#include <CouchbaseLite/CBLURLEndpointListener.h>
