@@ -745,6 +745,10 @@ pub struct ReplicatorConfiguration {
     This option is disabled by default (see \ref kCBLDefaultReplicatorAcceptParentCookies) which means
     that the parent-domain cookies are not permitted to save by default. */
     pub accept_parent_domain_cookies: bool,
+    /** Specify the replicator to accept only self-signed certs. Any non-self-signed certs will be rejected
+    to avoid accidentally using this mode with the non-self-signed certs in production. */
+    #[cfg(feature = "enterprise")]
+    pub accept_only_self_signed_server_certificate: bool,
 }
 
 //======== LIFECYCLE
@@ -855,6 +859,9 @@ impl Replicator {
                 },
                 collectionCount: collections.as_ref().map(|c| c.len()).unwrap_or_default(),
                 acceptParentDomainCookies: config.accept_parent_domain_cookies,
+                #[cfg(feature = "enterprise")]
+                acceptOnlySelfSignedServerCertificate: config
+                    .accept_only_self_signed_server_certificate,
                 context: std::ptr::addr_of!(*context) as *mut _,
             };
 

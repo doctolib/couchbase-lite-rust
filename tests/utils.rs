@@ -160,6 +160,8 @@ fn generate_replication_configuration(
         document_ids: config.document_ids,
         collections: None,
         accept_parent_domain_cookies: false,
+        #[cfg(feature = "enterprise")]
+        accept_only_self_signed_server_certificate: false,
     }
 }
 
