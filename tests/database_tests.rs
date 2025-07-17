@@ -116,7 +116,9 @@ fn in_transaction() {
     utils::with_db(|db| {
         let result = db.in_transaction(|db| {
             let mut doc = Document::new_with_id("document");
-            db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
+            let mut collection = db.default_collection_or_error().unwrap();
+            collection
+                .save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
                 .unwrap();
             Ok("document".to_string())
         });
@@ -126,15 +128,60 @@ fn in_transaction() {
 
         let result = db.in_transaction(|db| -> Result<String> {
             let mut doc = Document::new_with_id("document_error");
-            db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
+            let mut collection = db.default_collection_or_error().unwrap();
+            collection
+                .save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
                 .unwrap();
             Err(couchbase_lite::Error::default())
         });
 
         assert!(result.is_err());
 
-        assert!(db.get_document("document").is_ok());
-        assert!(db.get_document("document_error").is_err());
+        let mut collection = db.default_collection_or_error().unwrap();
+        assert!(collection.get_document("document").is_ok());
+        assert!(collection.get_document("document_error").is_err());
+    });
+}
+
+#[test]
+fn manual_transaction_commit() {
+    utils::with_db(|db| {
+        let initial_count = db.count();
+
+        {
+            let transaction = db.begin_transaction().unwrap();
+            let mut doc = Document::new_with_id("manual_commit_doc");
+            let mut collection = db.default_collection_or_error().unwrap();
+            collection
+                .save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
+                .unwrap();
+            transaction.commit().unwrap();
+        }
+
+        assert_eq!(db.count(), initial_count + 1);
+        let mut collection = db.default_collection_or_error().unwrap();
+        assert!(collection.get_document("manual_commit_doc").is_ok());
+    });
+}
+
+#[test]
+fn manual_transaction_rollback() {
+    utils::with_db(|db| {
+        let initial_count = db.count();
+
+        {
+            let _transaction = db.begin_transaction().unwrap();
+            let mut doc = Document::new_with_id("rollback_doc");
+            let mut collection = db.default_collection_or_error().unwrap();
+            collection
+                .save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
+                .unwrap();
+            // Transaction dropped here without commit -> automatic rollback
+        }
+
+        assert_eq!(db.count(), initial_count);
+        let mut collection = db.default_collection_or_error().unwrap();
+        assert!(collection.get_document("rollback_doc").is_err());
     });
 }
 
