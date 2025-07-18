@@ -359,7 +359,7 @@ impl Database {
     ///
     /// For simpler cases, consider using `in_transaction()` instead.
     pub fn begin_transaction(&mut self) -> Result<Transaction> {
-        Transaction::new(self.get_ref())
+        Transaction::new(self)
     }
 
     /// Encrypts or decrypts a database, or changes its encryption key.
@@ -606,20 +606,21 @@ impl Database {
 /// A database transaction that can be committed or rolled back.
 /// When dropped without being committed, the transaction is automatically rolled back.
 pub struct Transaction {
-    db_ref: *mut CBLDatabase,
+    db: Database,
     committed: bool,
 }
 
 impl Transaction {
-    fn new(db_ref: *mut CBLDatabase) -> Result<Self> {
+    fn new(db: &Database) -> Result<Self> {
+        let db_clone = db.clone();
         unsafe {
             let mut err = CBLError::default();
-            if !CBLDatabase_BeginTransaction(db_ref, &mut err) {
+            if !CBLDatabase_BeginTransaction(db_clone.get_ref(), &mut err) {
                 return failure(err);
             }
         }
         Ok(Transaction {
-            db_ref,
+            db: db_clone,
             committed: false,
         })
     }
@@ -628,7 +629,7 @@ impl Transaction {
     pub fn commit(mut self) -> Result<()> {
         unsafe {
             let mut err = CBLError::default();
-            if !CBLDatabase_EndTransaction(self.db_ref, true, &mut err) {
+            if !CBLDatabase_EndTransaction(self.db.get_ref(), true, &mut err) {
                 return failure(err);
             }
         }
@@ -642,7 +643,7 @@ impl Drop for Transaction {
         if !self.committed {
             unsafe {
                 let mut err = CBLError::default();
-                let _ = CBLDatabase_EndTransaction(self.db_ref, false, &mut err);
+                let _ = CBLDatabase_EndTransaction(self.db.get_ref(), false, &mut err);
             }
         }
     }
