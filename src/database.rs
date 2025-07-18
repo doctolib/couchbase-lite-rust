@@ -358,7 +358,7 @@ impl Database {
     /// it will be rolled back when dropped.
     ///
     /// For simpler cases, consider using `in_transaction()` instead.
-    pub fn begin_transaction(&mut self) -> Result<Transaction> {
+    pub fn begin_transaction(&self) -> Result<Transaction> {
         Transaction::new(self)
     }
 
