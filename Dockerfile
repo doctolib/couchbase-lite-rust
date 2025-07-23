@@ -1,4 +1,4 @@
-FROM --platform=amd64 rust@sha256:5771a3cc2081935c59ac52b92d49c9e164d4fed92c9f6420aa8cc50364aead6e AS strip-stage
+FROM --platform=amd64 rust@sha256:4f63ef81873422e39cc914de76adbdd58097c0d693e134e163ea9844c0e2ee99 AS strip-stage
 ARG DIRNAME
 RUN apt-get update
 RUN apt-get -y install binutils binutils-aarch64-linux-gnu
