@@ -16,7 +16,6 @@ fn document_new() {
     assert_ne!(document.id(), "");
     assert_eq!(document.revision_id(), None);
     assert_eq!(document.sequence(), 0);
-    assert!(document.properties());
     assert_eq!(document.properties().count(), 0);
 }
 
@@ -29,7 +28,6 @@ fn document_new_with_id() {
     assert_eq!(document.id(), "foo");
     assert_eq!(document.revision_id(), None);
     assert_eq!(document.sequence(), 0);
-    assert!(document.properties());
     assert_eq!(document.properties().count(), 0);
 }
 

@@ -72,7 +72,6 @@ fn basic_values() {
     assert_eq!(dict.get("s").as_string(), Some("Foo"));
 
     let a = dict.get("a").as_array();
-    assert!(a);
     assert_eq!(a, a);
     assert_eq!(a.count(), 2);
     assert_eq!(a.get(0).as_i64(), Some(1));
