@@ -26,8 +26,6 @@ use std::{time::Duration, thread};
 
 pub mod utils;
 
-use crate::utils::default_collection;
-
 //////// TESTS:
 
 #[test]

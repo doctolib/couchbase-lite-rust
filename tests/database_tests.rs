@@ -248,15 +248,18 @@ fn db_encryption_key() {
 #[test]
 fn add_listener() {
     utils::with_db(|db| {
+        let mut default_collection = default_collection(db);
+
         let (sender, receiver) = std::sync::mpsc::channel();
-        let listener_token = default_collection(db).add_listener(Box::new(move |_, doc_ids| {
+        let listener_token = default_collection.add_listener(Box::new(move |_, doc_ids| {
+            println!("\nDoc ids: {:?}\n", doc_ids);
             if doc_ids.first().unwrap() == "document" {
                 sender.send(true).unwrap();
             }
         }));
 
         let mut doc = Document::new_with_id("document");
-        default_collection(db)
+        default_collection
             .save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
             .unwrap();
 
@@ -276,14 +279,15 @@ fn buffer_notifications() {
             utils::set_static(&BUFFER_NOTIFICATIONS, true);
         });
 
-        let listener_token = default_collection(db).add_listener(Box::new(move |_, doc_ids| {
+        let mut default_collection = default_collection(db);
+        let listener_token = default_collection.add_listener(Box::new(move |_, doc_ids| {
             if doc_ids.first().unwrap() == "document" {
                 utils::set_static(&DOCUMENT_DETECTED, true);
             }
         }));
 
         let mut doc = Document::new_with_id("document");
-        default_collection(db)
+        default_collection
             .save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
             .unwrap();
 
