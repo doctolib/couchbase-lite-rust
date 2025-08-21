@@ -10,7 +10,7 @@ use std::{
 };
 #[cfg(feature = "enterprise")]
 use std::collections::HashMap;
-use couchbase_lite::logging::CustomLogSink;
+use couchbase_lite::{collection::Collection, logging::CustomLogSink};
 
 pub const DB_NAME: &str = "test_db";
 
@@ -488,8 +488,14 @@ pub fn add_doc(db: &mut Database, id: &str, i: i64, s: &str) {
     let mut props = doc.mutable_properties();
     props.at("i").put_i64(i);
     props.at("s").put_string(s);
-    db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
+    db.default_collection_or_error()
+        .unwrap()
+        .save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
         .expect("save");
+}
+
+pub fn default_collection(db: &Database) -> Collection {
+    db.default_collection_or_error().unwrap()
 }
 
 // Static

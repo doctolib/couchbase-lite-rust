@@ -19,6 +19,8 @@ extern crate couchbase_lite;
 extern crate tempdir;
 extern crate lazy_static;
 
+use crate::utils::default_collection;
+
 use self::couchbase_lite::*;
 use self::tempdir::TempDir;
 use lazy_static::lazy_static;
@@ -77,14 +79,15 @@ fn copy_file() {
         encryption_key: None,
     };
     match Database::open(DB_NAME, Some(cfg.clone())) {
-        Ok(mut db) => {
+        Ok(db) => {
             let mut doc = Document::new_with_id("foo");
 
             let mut props = doc.mutable_properties();
             props.at("i").put_i64(1);
             props.at("s").put_string("test");
 
-            db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
+            default_collection(&db)
+                .save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
                 .expect("save");
         }
         Err(_) => panic!("The initial database could not be opened"),
@@ -102,7 +105,7 @@ fn copy_file() {
     // Check document is inside the new DB
     match Database::open(DB_NAME_BACKUP, Some(cfg)) {
         Ok(db) => {
-            let doc = db.get_document("foo").unwrap();
+            let doc = default_collection(&db).get_document("foo").unwrap();
 
             assert_eq!(doc.properties().get("i").as_i64().unwrap(), 1);
             assert_eq!(doc.properties().get("s").as_string().unwrap(), "test");
@@ -116,7 +119,7 @@ fn in_transaction() {
     utils::with_db(|db| {
         let result = db.in_transaction(|db| {
             let mut doc = Document::new_with_id("document");
-            let mut collection = db.default_collection_or_error().unwrap();
+            let mut collection = default_collection(db);
             collection
                 .save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
                 .unwrap();
@@ -128,7 +131,7 @@ fn in_transaction() {
 
         let result = db.in_transaction(|db| -> Result<String> {
             let mut doc = Document::new_with_id("document_error");
-            let mut collection = db.default_collection_or_error().unwrap();
+            let mut collection = default_collection(db);
             collection
                 .save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
                 .unwrap();
@@ -137,7 +140,7 @@ fn in_transaction() {
 
         assert!(result.is_err());
 
-        let mut collection = db.default_collection_or_error().unwrap();
+        let collection = default_collection(db);
         assert!(collection.get_document("document").is_ok());
         assert!(collection.get_document("document_error").is_err());
     });
@@ -146,7 +149,7 @@ fn in_transaction() {
 #[test]
 fn manual_transaction_commit() {
     utils::with_db(|db| {
-        let initial_count = db.count();
+        let initial_count = default_collection(db).count();
 
         {
             let transaction = db.begin_transaction().unwrap();
@@ -158,8 +161,8 @@ fn manual_transaction_commit() {
             transaction.commit().unwrap();
         }
 
-        assert_eq!(db.count(), initial_count + 1);
-        let mut collection = db.default_collection_or_error().unwrap();
+        assert_eq!(default_collection(db).count(), initial_count + 1);
+        let collection = db.default_collection_or_error().unwrap();
         assert!(collection.get_document("manual_commit_doc").is_ok());
     });
 }
@@ -167,7 +170,7 @@ fn manual_transaction_commit() {
 #[test]
 fn manual_transaction_rollback() {
     utils::with_db(|db| {
-        let initial_count = db.count();
+        let initial_count = default_collection(db).count();
 
         {
             let _transaction = db.begin_transaction().unwrap();
@@ -179,8 +182,8 @@ fn manual_transaction_rollback() {
             // Transaction dropped here without commit -> automatic rollback
         }
 
-        assert_eq!(db.count(), initial_count);
-        let mut collection = db.default_collection_or_error().unwrap();
+        assert_eq!(default_collection(db).count(), initial_count);
+        let collection = db.default_collection_or_error().unwrap();
         assert!(collection.get_document("rollback_doc").is_err());
     });
 }
@@ -189,7 +192,7 @@ fn manual_transaction_rollback() {
 fn db_properties() {
     utils::with_db(|db| {
         assert_eq!(db.name(), utils::DB_NAME);
-        assert_eq!(db.count(), 0);
+        assert_eq!(default_collection(db).count(), 0);
     });
 }
 
@@ -215,10 +218,11 @@ fn db_encryption_key() {
 
     // Create database with no encryption & one document
     {
-        let mut db = Database::open(utils::DB_NAME, Some(cfg_no_encryption.clone())).unwrap();
+        let db = Database::open(utils::DB_NAME, Some(cfg_no_encryption.clone())).unwrap();
         let mut doc = Document::new_with_id("foo");
         assert!(
-            db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
+            default_collection(&db)
+                .save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
                 .is_ok()
         );
     }
@@ -228,7 +232,7 @@ fn db_encryption_key() {
     assert!(Database::open(utils::DB_NAME, Some(cfg_encryption1.clone())).is_err());
     {
         let mut db = Database::open(utils::DB_NAME, Some(cfg_no_encryption.clone())).unwrap();
-        assert!(db.get_document("foo").is_ok());
+        assert!(default_collection(&db).get_document("foo").is_ok());
         assert!(db.change_encryption_key(&encryption_key).is_ok());
     }
 
@@ -237,22 +241,26 @@ fn db_encryption_key() {
     assert!(Database::open(utils::DB_NAME, Some(cfg_encryption1.clone())).is_ok());
     {
         let db = Database::open(utils::DB_NAME, Some(cfg_encryption1.clone())).unwrap();
-        assert!(db.get_document("foo").is_ok());
+        assert!(default_collection(&db).get_document("foo").is_ok());
     }
 }
 
 #[test]
 fn add_listener() {
     utils::with_db(|db| {
+        let mut default_collection = default_collection(db);
+
         let (sender, receiver) = std::sync::mpsc::channel();
-        let listener_token = db.add_listener(Box::new(move |_, doc_ids| {
+        let listener_token = default_collection.add_listener(Box::new(move |_, doc_ids| {
+            println!("\nDoc ids: {:?}\n", doc_ids);
             if doc_ids.first().unwrap() == "document" {
                 sender.send(true).unwrap();
             }
         }));
 
         let mut doc = Document::new_with_id("document");
-        db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
+        default_collection
+            .save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
             .unwrap();
 
         receiver.recv_timeout(Duration::from_secs(1)).unwrap();
@@ -271,14 +279,16 @@ fn buffer_notifications() {
             utils::set_static(&BUFFER_NOTIFICATIONS, true);
         });
 
-        let listener_token = db.add_listener(Box::new(move |_, doc_ids| {
+        let mut default_collection = default_collection(db);
+        let listener_token = default_collection.add_listener(Box::new(move |_, doc_ids| {
             if doc_ids.first().unwrap() == "document" {
                 utils::set_static(&DOCUMENT_DETECTED, true);
             }
         }));
 
         let mut doc = Document::new_with_id("document");
-        db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
+        default_collection
+            .save_document_with_concurency_control(&mut doc, ConcurrencyControl::LastWriteWins)
             .unwrap();
 
         assert!(!utils::check_static_with_wait(

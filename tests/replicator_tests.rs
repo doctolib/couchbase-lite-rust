@@ -25,6 +25,7 @@ use encryptable::Encryptable;
 use std::{time::Duration, thread};
 
 pub mod utils;
+use crate::utils::default_collection;
 
 //////// TESTS:
 
@@ -42,7 +43,7 @@ fn push_replication() {
 
         // Check document is replicated to central
         assert!(utils::check_callback_with_wait(
-            || central_db.get_document("foo").is_ok(),
+            || default_collection(central_db).get_document("foo").is_ok(),
             None
         ));
     });
@@ -62,7 +63,7 @@ fn pull_replication() {
 
         // Check document replicated to local
         assert!(utils::check_callback_with_wait(
-            || local_db.get_document("foo").is_ok(),
+            || default_collection(local_db).get_document("foo").is_ok(),
             None
         ));
     });
@@ -84,13 +85,13 @@ fn push_pull_replication() {
 
         // Check document replicated to central
         assert!(utils::check_callback_with_wait(
-            || central_db.get_document("foo").is_ok(),
+            || default_collection(central_db).get_document("foo").is_ok(),
             None
         ));
 
         // Check document replicated to local DB 2
         assert!(utils::check_callback_with_wait(
-            || local_db2.get_document("foo").is_ok(),
+            || default_collection(local_db2).get_document("foo").is_ok(),
             None
         ));
     });
@@ -115,7 +116,7 @@ fn pull_type_not_pushing() {
 
         // Check the replication process is not pushing to central
         assert!(!utils::check_callback_with_wait(
-            || central_db.get_document("foo").is_ok(),
+            || default_collection(central_db).get_document("foo").is_ok(),
             None
         ));
     });
@@ -140,7 +141,7 @@ fn push_type_not_pulling() {
 
         // Check document not replicated in local
         assert!(!utils::check_callback_with_wait(
-            || local_db.get_document("foo").is_ok(),
+            || default_collection(local_db).get_document("foo").is_ok(),
             None
         ));
     });
@@ -170,11 +171,11 @@ fn document_ids() {
 
         // Check only 'foo' is replicated
         assert!(utils::check_callback_with_wait(
-            || central_db.get_document("foo").is_ok(),
+            || default_collection(central_db).get_document("foo").is_ok(),
             None
         ));
         assert!(!utils::check_callback_with_wait(
-            || central_db.get_document("foo2").is_ok(),
+            || default_collection(central_db).get_document("foo2").is_ok(),
             None
         ));
     });
@@ -212,25 +213,25 @@ fn push_and_pull_filter() {
 
         // Check only 'foo' and 'foo2' were replicated to central
         assert!(utils::check_callback_with_wait(
-            || central_db.get_document("foo").is_ok(),
+            || default_collection(central_db).get_document("foo").is_ok(),
             None
         ));
         assert!(utils::check_callback_with_wait(
-            || central_db.get_document("foo2").is_ok(),
+            || default_collection(central_db).get_document("foo2").is_ok(),
             None
         ));
         assert!(!utils::check_callback_with_wait(
-            || central_db.get_document("foo3").is_ok(),
+            || default_collection(central_db).get_document("foo3").is_ok(),
             None
         ));
 
         // Check only foo2' were replicated to DB 2
         assert!(!utils::check_callback_with_wait(
-            || local_db2.get_document("foo").is_ok(),
+            || default_collection(local_db2).get_document("foo").is_ok(),
             None
         ));
         assert!(utils::check_callback_with_wait(
-            || local_db2.get_document("foo2").is_ok(),
+            || default_collection(local_db2).get_document("foo2").is_ok(),
             None
         ));
     });
@@ -269,11 +270,11 @@ fn conflict_resolver() {
 
         // Check 'foo' is replicated to central and DB 2
         assert!(utils::check_callback_with_wait(
-            || central_db.get_document("foo").is_ok(),
+            || default_collection(central_db).get_document("foo").is_ok(),
             None
         ));
         assert!(utils::check_callback_with_wait(
-            || local_db2.get_document("foo").is_ok(),
+            || default_collection(local_db2).get_document("foo").is_ok(),
             None
         ));
 
@@ -281,22 +282,22 @@ fn conflict_resolver() {
         repl1.stop(None);
 
         // Modify 'foo' in DB 1
-        let mut foo = local_db1.get_document("foo").unwrap();
+        let mut foo = default_collection(local_db1).get_document("foo").unwrap();
         foo.mutable_properties().at("i").put_i64(i1);
-        local_db1
+        default_collection(local_db1)
             .save_document_with_concurency_control(&mut foo, ConcurrencyControl::FailOnConflict)
             .expect("save");
 
         // Modify 'foo' in DB 2
-        let mut foo = local_db2.get_document("foo").unwrap();
+        let mut foo = default_collection(local_db2).get_document("foo").unwrap();
         foo.mutable_properties().at("i").put_i64(i2);
-        local_db2
+        default_collection(local_db2)
             .save_document_with_concurency_control(&mut foo, ConcurrencyControl::FailOnConflict)
             .expect("save");
 
         // Check DB 2 version is in central
         assert!(utils::check_callback_with_wait(
-            || central_db
+            || default_collection(central_db)
                 .get_document("foo")
                 .unwrap()
                 .properties()
@@ -314,7 +315,7 @@ fn conflict_resolver() {
 
         // Check DB 2 version is in DB 1
         assert!(utils::check_callback_with_wait(
-            || local_db1
+            || default_collection(local_db1)
                 .get_document("foo")
                 .unwrap()
                 .properties()
@@ -344,7 +345,7 @@ fn conflict_resolver_save_keep_local() {
 
         // Check 'foo' is replicated to central
         assert!(utils::check_callback_with_wait(
-            || central_db.get_document("foo").is_ok(),
+            || default_collection(central_db).get_document("foo").is_ok(),
             None
         ));
 
@@ -352,21 +353,21 @@ fn conflict_resolver_save_keep_local() {
         repl.stop(None);
 
         // Modify 'foo' in central
-        let mut foo = central_db.get_document("foo").unwrap();
+        let mut foo = default_collection(central_db).get_document("foo").unwrap();
         foo.mutable_properties().at("i").put_i64(i2);
-        central_db
+        default_collection(central_db)
             .save_document_with_concurency_control(&mut foo, ConcurrencyControl::FailOnConflict)
             .expect("save");
 
         // Fetch 'foo' in DB 1
-        let mut foo = local_db.get_document("foo").unwrap();
+        let mut foo = default_collection(local_db).get_document("foo").unwrap();
 
         // Restart replication
         repl.start(false);
 
         // Check central version of 'foo' is replicated to DB 1
         assert!(utils::check_callback_with_wait(
-            || local_db
+            || default_collection(local_db)
                 .get_document("foo")
                 .expect("foo exists")
                 .properties()
@@ -379,14 +380,14 @@ fn conflict_resolver_save_keep_local() {
         // Modify 'foo' in DB1 from outdated document
         foo.mutable_properties().at("i").put_i64(i1);
         assert!(
-            local_db
+            default_collection(local_db)
                 .save_document_resolving(&mut foo, move |_, _| true)
                 .is_ok()
         );
 
         // Assert conflict was resolved by keeping latest version
         assert!(utils::check_callback_with_wait(
-            || local_db
+            || default_collection(local_db)
                 .get_document("foo")
                 .expect("foo exists")
                 .properties()
@@ -398,7 +399,7 @@ fn conflict_resolver_save_keep_local() {
 
         // Check 'foo' new version replicated to central
         assert!(utils::check_callback_with_wait(
-            || central_db
+            || default_collection(central_db)
                 .get_document("foo")
                 .expect("foo exists")
                 .properties()
@@ -428,7 +429,7 @@ fn conflict_resolver_save_keep_remote() {
 
         // Check 'foo' is replicated to central
         assert!(utils::check_callback_with_wait(
-            || central_db.get_document("foo").is_ok(),
+            || default_collection(central_db).get_document("foo").is_ok(),
             None
         ));
 
@@ -436,21 +437,21 @@ fn conflict_resolver_save_keep_remote() {
         repl.stop(None);
 
         // Modify 'foo' in central
-        let mut foo = central_db.get_document("foo").unwrap();
+        let mut foo = default_collection(central_db).get_document("foo").unwrap();
         foo.mutable_properties().at("i").put_i64(i2);
-        central_db
+        default_collection(central_db)
             .save_document_with_concurency_control(&mut foo, ConcurrencyControl::FailOnConflict)
             .expect("save");
 
         // Fetch 'foo' in DB 1
-        let mut foo = local_db.get_document("foo").unwrap();
+        let mut foo = default_collection(local_db).get_document("foo").unwrap();
 
         // Restart replication
         repl.start(false);
 
         // Check central version of 'foo' is replicated to DB 1
         assert!(utils::check_callback_with_wait(
-            || local_db
+            || default_collection(local_db)
                 .get_document("foo")
                 .expect("foo exists")
                 .properties()
@@ -463,14 +464,14 @@ fn conflict_resolver_save_keep_remote() {
         // Modify 'foo' in DB1 from outdated document
         foo.mutable_properties().at("i").put_i64(i1);
         assert!(
-            local_db
+            default_collection(local_db)
                 .save_document_resolving(&mut foo, move |_, _| false)
                 .is_err()
         );
 
         // Assert conflict was resolved by keeping central's version
         assert!(utils::check_callback_with_wait(
-            || local_db
+            || default_collection(local_db)
                 .get_document("foo")
                 .expect("foo exists")
                 .properties()
@@ -482,7 +483,7 @@ fn conflict_resolver_save_keep_remote() {
 
         // Check 'foo' was unchanged in central
         assert!(utils::check_callback_with_wait(
-            || central_db
+            || default_collection(central_db)
                 .get_document("foo")
                 .expect("foo exists")
                 .properties()
@@ -599,7 +600,7 @@ fn encryption_ok_decryption_ok() {
             props
                 .at("s")
                 .put_encrypt(&Encryptable::create_with_string("test_encryption"));
-            local_db1
+            default_collection(local_db1)
                 .save_document_with_concurency_control(
                     &mut doc_db1,
                     ConcurrencyControl::FailOnConflict,
@@ -609,22 +610,22 @@ fn encryption_ok_decryption_ok() {
 
         // Check document is replicated with data encrypted in central
         assert!(utils::check_callback_with_wait(
-            || central_db.get_document("foo").is_ok(),
+            || default_collection(central_db).get_document("foo").is_ok(),
             None
         ));
         {
-            let doc_central = central_db.get_document("foo").unwrap();
+            let doc_central = default_collection(central_db).get_document("foo").unwrap();
             let dict = doc_central.properties();
             assert!(dict.to_keys_hash_set().get("encrypted$s").is_some());
         }
 
         // Check document is replicated with data decrypted in DB 2
         assert!(utils::check_callback_with_wait(
-            || local_db2.get_document("foo").is_ok(),
+            || default_collection(local_db2).get_document("foo").is_ok(),
             None
         ));
         {
-            let doc_db2 = local_db2.get_document("foo").unwrap();
+            let doc_db2 = default_collection(local_db2).get_document("foo").unwrap();
             let dict = doc_db2.properties();
             let value = dict.get("s");
             assert!(value.is_encryptable());
@@ -660,21 +661,21 @@ fn encryption_error_temporary() {
             props
                 .at("s")
                 .put_encrypt(&Encryptable::create_with_string("test_encryption"));
-            local_db
+            default_collection(local_db)
                 .save_document_with_concurency_control(
                     &mut doc_db1,
                     ConcurrencyControl::FailOnConflict,
                 )
                 .expect("save");
         }
-        assert!(local_db.get_document("foo").is_ok());
+        assert!(default_collection(local_db).get_document("foo").is_ok());
 
         // Manually trigger the replication
         repl.start(false);
 
         // Check document is not replicated in central because of the encryption error
         thread::sleep(Duration::from_secs(5));
-        assert!(central_db.get_document("foo").is_err());
+        assert!(default_collection(central_db).get_document("foo").is_err());
     });
 
     // Change local DB 1 replicator to make the encryption work
@@ -692,7 +693,7 @@ fn encryption_error_temporary() {
 
         // Check document is replicated in central
         assert!(utils::check_callback_with_wait(
-            || central_db.get_document("foo").is_ok(),
+            || default_collection(central_db).get_document("foo").is_ok(),
             None
         ));
     });
@@ -722,7 +723,7 @@ fn decryption_error_temporary() {
             let doc = r#"{"i":1234,"encrypted$s":{"alg":"CB_MOBILE_CUSTOM","ciphertext":"EkRVQ0RvVV5TQklARFlfXhI="}}"#;
             doc_db1.set_properties_as_json(&doc).unwrap();
 
-            central_db
+            default_collection(central_db)
                 .save_document_with_concurency_control(
                     &mut doc_db1,
                     ConcurrencyControl::FailOnConflict,
@@ -730,14 +731,14 @@ fn decryption_error_temporary() {
                 .expect("save");
         }
 
-        assert!(central_db.get_document("foo").is_ok());
+        assert!(default_collection(central_db).get_document("foo").is_ok());
 
         // Manually trigger the replication
         repl.start(false);
 
         // Check document is not replicated in local because of the decryption error
         thread::sleep(Duration::from_secs(5));
-        assert!(local_db.get_document("foo").is_err());
+        assert!(default_collection(local_db).get_document("foo").is_err());
     });
 
     // Change local DB replicator to make the decryption work
@@ -755,7 +756,7 @@ fn decryption_error_temporary() {
 
         // Check document is replicated in local
         assert!(utils::check_callback_with_wait(
-            || local_db.get_document("foo").is_ok(),
+            || default_collection(local_db).get_document("foo").is_ok(),
             None
         ));
     });
@@ -786,21 +787,21 @@ fn encryption_error_permanent() {
             props
                 .at("s")
                 .put_encrypt(&Encryptable::create_with_string("test_encryption"));
-            local_db
+            default_collection(local_db)
                 .save_document_with_concurency_control(
                     &mut doc_db1,
                     ConcurrencyControl::FailOnConflict,
                 )
                 .expect("save");
         }
-        assert!(local_db.get_document("foo").is_ok());
+        assert!(default_collection(local_db).get_document("foo").is_ok());
 
         // Manually trigger the replication
         repl.start(false);
 
         // Check document is not replicated in central because of the encryption error
         thread::sleep(Duration::from_secs(5));
-        assert!(central_db.get_document("foo").is_err());
+        assert!(default_collection(central_db).get_document("foo").is_err());
     });
 
     // Change local DB 1 replicator to make the encryption work
@@ -818,18 +819,18 @@ fn encryption_error_permanent() {
 
         // Check document is not replicated in central
         assert!(utils::check_callback_with_wait(
-            || central_db.get_document("foo").is_err(),
+            || default_collection(central_db).get_document("foo").is_err(),
             None
         ));
     });
 
     tester.test(|local_db, central_db, repl| {
         // Create new revision for document 'foo' in local
-        let mut doc = local_db.get_document("foo").unwrap();
+        let mut doc = default_collection(local_db).get_document("foo").unwrap();
         let mut props = doc.mutable_properties();
         props.at("i").put_i64(1235);
 
-        local_db
+        default_collection(local_db)
             .save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
             .expect("save");
 
@@ -838,7 +839,7 @@ fn encryption_error_permanent() {
 
         // Check document is replicated in central
         assert!(utils::check_callback_with_wait(
-            || central_db.get_document("foo").is_ok(),
+            || default_collection(central_db).get_document("foo").is_ok(),
             None
         ));
     });
@@ -868,7 +869,7 @@ fn decryption_error_permanent() {
             let doc = r#"{"i":1234,"encrypted$s":{"alg":"CB_MOBILE_CUSTOM","ciphertext":"EkRVQ0RvVV5TQklARFlfXhI="}}"#;
             doc_db1.set_properties_as_json(&doc).unwrap();
 
-            central_db
+            default_collection(central_db)
                 .save_document_with_concurency_control(
                     &mut doc_db1,
                     ConcurrencyControl::FailOnConflict,
@@ -876,14 +877,14 @@ fn decryption_error_permanent() {
                 .expect("save");
         }
 
-        assert!(central_db.get_document("foo").is_ok());
+        assert!(default_collection(central_db).get_document("foo").is_ok());
 
         // Manually trigger the replication
         repl.start(false);
 
         // Check document is not replicated in local because of the decryption error
         thread::sleep(Duration::from_secs(5));
-        assert!(local_db.get_document("foo").is_err());
+        assert!(default_collection(local_db).get_document("foo").is_err());
     });
 
     // Change local DB replicator to make the decryption work
@@ -901,18 +902,18 @@ fn decryption_error_permanent() {
 
         // Check document is not replicated in local
         assert!(utils::check_callback_with_wait(
-            || local_db.get_document("foo").is_err(),
+            || default_collection(local_db).get_document("foo").is_err(),
             None
         ));
     });
 
     tester.test(|local_db, central_db, repl| {
         // Create new revision for document 'foo' in central
-        let mut doc = central_db.get_document("foo").unwrap();
+        let mut doc = default_collection(central_db).get_document("foo").unwrap();
         let mut props = doc.mutable_properties();
         props.at("i").put_i64(1235);
 
-        central_db
+        default_collection(central_db)
             .save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
             .expect("save");
 
@@ -921,7 +922,7 @@ fn decryption_error_permanent() {
 
         // Check document is replicated in local
         assert!(utils::check_callback_with_wait(
-            || local_db.get_document("foo").is_ok(),
+            || default_collection(local_db).get_document("foo").is_ok(),
             None
         ));
     });
@@ -950,7 +951,7 @@ mod unsafe_test {
 
             // Check the replication process is not running automatically
             assert!(!utils::check_callback_with_wait(
-                || central_db.get_document("foo").is_ok(),
+                || default_collection(central_db).get_document("foo").is_ok(),
                 None
             ));
 
@@ -959,7 +960,7 @@ mod unsafe_test {
 
             // Check the replication was successful
             assert!(utils::check_callback_with_wait(
-                || central_db.get_document("foo").is_ok(),
+                || default_collection(central_db).get_document("foo").is_ok(),
                 None
             ));
         });

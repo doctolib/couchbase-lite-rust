@@ -4,6 +4,8 @@ extern crate regex;
 use couchbase_lite::index::{ValueIndexConfiguration, ArrayIndexConfiguration};
 use regex::Regex;
 
+use crate::utils::default_collection;
+
 use self::couchbase_lite::*;
 
 pub mod utils;
@@ -74,7 +76,8 @@ fn parameters() {
         props.at("f64").put_f64(3.1);
         props.at("i64").put_i64(3);
         props.at("string").put_string("allo");
-        db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
+        default_collection(db)
+            .save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
             .expect("save");
 
         let query = Query::new(
@@ -161,15 +164,21 @@ fn get_index_name_from_explain(explain: &str) -> Option<String> {
 fn full_index() {
     utils::with_db(|db| {
         assert!(
-            db.create_index(
-                "new_index",
-                &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField"]]"#, None),
-            )
-            .unwrap()
+            default_collection(db)
+                .create_index(
+                    "new_index",
+                    &ValueIndexConfiguration::new(QueryLanguage::JSON, r#"[[".someField"]]"#, None),
+                )
+                .unwrap()
         );
 
         // Check index creation
-        let value = db.get_index_names().iter().next().unwrap();
+        let value = default_collection(db)
+            .get_index_names()
+            .unwrap()
+            .iter()
+            .next()
+            .unwrap();
         let name = value.as_string().unwrap();
         assert_eq!(name, "new_index");
 
@@ -200,13 +209,13 @@ fn full_index() {
         assert!(index.is_none());
 
         // Check index deletion
-        assert_eq!(db.get_index_names().count(), 1);
+        assert_eq!(default_collection(db).get_index_names().unwrap().count(), 1);
 
-        db.delete_index("idx").unwrap();
-        assert_eq!(db.get_index_names().count(), 1);
+        default_collection(db).delete_index("idx").unwrap();
+        assert_eq!(default_collection(db).get_index_names().unwrap().count(), 1);
 
-        db.delete_index("new_index").unwrap();
-        assert_eq!(db.get_index_names().count(), 0);
+        default_collection(db).delete_index("new_index").unwrap();
+        assert_eq!(default_collection(db).get_index_names().unwrap().count(), 0);
     });
 }
 
@@ -214,19 +223,25 @@ fn full_index() {
 fn partial_index() {
     utils::with_db(|db| {
         assert!(
-            db.create_index(
-                "new_index",
-                &ValueIndexConfiguration::new(
-                    QueryLanguage::JSON,
-                    r#"{"WHAT": [[".id"]], "WHERE": ["=", [".someField"], "someValue"]}"#,
-                    None
-                ),
-            )
-            .unwrap()
+            default_collection(db)
+                .create_index(
+                    "new_index",
+                    &ValueIndexConfiguration::new(
+                        QueryLanguage::JSON,
+                        r#"{"WHAT": [[".id"]], "WHERE": ["=", [".someField"], "someValue"]}"#,
+                        None
+                    ),
+                )
+                .unwrap()
         );
 
         // Check index creation
-        let value = db.get_index_names().iter().next().unwrap();
+        let value = default_collection(db)
+            .get_index_names()
+            .unwrap()
+            .iter()
+            .next()
+            .unwrap();
         let name = value.as_string().unwrap();
         assert_eq!(name, "new_index");
 
@@ -262,19 +277,25 @@ fn partial_index() {
 fn partial_index_with_condition_field() {
     utils::with_db(|db| {
         assert!(
-            db.create_index(
-                "new_index",
-                &ValueIndexConfiguration::new(
-                    QueryLanguage::JSON,
-                    r#"[[".id"]]"#,
-                    Some(r#"["=", [".someField"], "someValue"]"#)
-                ),
-            )
-            .unwrap()
+            default_collection(db)
+                .create_index(
+                    "new_index",
+                    &ValueIndexConfiguration::new(
+                        QueryLanguage::JSON,
+                        r#"[[".id"]]"#,
+                        Some(r#"["=", [".someField"], "someValue"]"#)
+                    ),
+                )
+                .unwrap()
         );
 
         // Check index creation
-        let value = db.get_index_names().iter().next().unwrap();
+        let value = default_collection(db)
+            .get_index_names()
+            .unwrap()
+            .iter()
+            .next()
+            .unwrap();
         let name = value.as_string().unwrap();
         assert_eq!(name, "new_index");
 
