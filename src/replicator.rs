@@ -170,7 +170,7 @@ pub enum ReplicatorType {
 
 impl From<CBLReplicatorType> for ReplicatorType {
     fn from(repl_type: CBLReplicatorType) -> Self {
-        match u32::from(repl_type) {
+        match i32::from(repl_type) {
             kCBLReplicatorTypePushAndPull => Self::PushAndPull,
             kCBLReplicatorTypePush => Self::Push,
             kCBLReplicatorTypePull => Self::Pull,
@@ -197,7 +197,7 @@ pub enum ProxyType {
 
 impl From<CBLProxyType> for ProxyType {
     fn from(proxy_type: CBLProxyType) -> Self {
-        match u32::from(proxy_type) {
+        match i32::from(proxy_type) {
             kCBLProxyHTTP => Self::HTTP,
             kCBLProxyHTTPS => Self::HTTPS,
             _ => unreachable!(),
@@ -297,7 +297,10 @@ unsafe extern "C" fn c_replication_pull_filter(
     }
 }
 fn read_document_flags(flags: CBLDocumentFlags) -> (bool, bool) {
-    (flags & DELETED != 0, flags & ACCESS_REMOVED != 0)
+    (
+        flags & DELETED as u32 != 0,
+        flags & ACCESS_REMOVED as u32 != 0,
+    )
 }
 
 /** Conflict-resolution callback for use in replications. This callback will be invoked
@@ -1085,7 +1088,7 @@ pub enum ReplicatorActivityLevel {
 
 impl From<u8> for ReplicatorActivityLevel {
     fn from(level: u8) -> Self {
-        match u32::from(level) {
+        match i32::from(level) {
             kCBLReplicatorStopped => Self::Stopped,
             kCBLReplicatorOffline => Self::Offline,
             kCBLReplicatorConnecting => Self::Connecting,
@@ -1178,8 +1181,8 @@ unsafe extern "C" fn c_replicator_document_change_listener(
 }
 
 /** Flags describing a replicated document. */
-pub static DELETED: u32 = kCBLDocumentFlagsDeleted;
-pub static ACCESS_REMOVED: u32 = kCBLDocumentFlagsAccessRemoved;
+pub static DELETED: i32 = kCBLDocumentFlagsDeleted;
+pub static ACCESS_REMOVED: i32 = kCBLDocumentFlagsAccessRemoved;
 
 /** Information about a document that's been pushed or pulled. */
 pub struct ReplicatedDocument {

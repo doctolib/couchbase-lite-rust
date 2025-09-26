@@ -172,6 +172,10 @@ fn generate_bindings() -> Result<(), Box<dyn Error>> {
             .clang_arg(format!("--target={}", "x86_64-pc-windows-gnu"));
     }
 
+    bindings = bindings
+        .clang_arg("-IC:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.40.33807\\include".to_string())
+        .clang_arg("-IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.17763.0\\ucrt");
+
     let out_dir = env::var("OUT_DIR")?;
     bindings
         .allowlist_type("CBL.*")
@@ -221,6 +225,13 @@ fn configure_rustc() -> Result<(), Box<dyn Error>> {
             env!("CARGO_MANIFEST_DIR"),
             CBL_LIB_DIR
         );
+    } else if target_os == "windows" {
+        println!("cargo:rustc-link-lib=dylib=cblite");
+        println!(
+            "cargo:rustc-link-search={}/{}/windows",
+            env!("CARGO_MANIFEST_DIR"),
+            CBL_LIB_DIR
+        );
     } else {
         println!("cargo:rustc-link-lib=dylib=cblite");
         println!(
@@ -239,10 +250,8 @@ pub fn copy_lib() -> Result<(), Box<dyn Error>> {
         "{}/{}/{}/",
         env!("CARGO_MANIFEST_DIR"),
         CBL_LIB_DIR,
-        if target_os == "ios" {
-            "ios".to_string()
-        } else if target_os == "macos" {
-            "macos".to_string()
+        if target_os == "ios" || target_os == "macos" || target_os == "windows" {
+            target_os.clone()
         } else {
             env::var("TARGET").unwrap()
         }

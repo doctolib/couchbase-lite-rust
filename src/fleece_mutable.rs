@@ -80,7 +80,7 @@ impl MutableArray {
     pub fn from_array_(array: &Array, flags: CopyFlags) -> Self {
         unsafe {
             Self {
-                cbl_ref: FLArray_MutableCopy(array.get_ref(), flags as u32),
+                cbl_ref: FLArray_MutableCopy(array.get_ref(), flags as i32),
             }
         }
     }
@@ -274,7 +274,7 @@ impl MutableDict {
     pub fn from_dict_(dict: &Dict, flags: CopyFlags) -> Self {
         unsafe {
             Self {
-                cbl_ref: FLDict_MutableCopy(dict.get_ref(), flags as u32),
+                cbl_ref: FLDict_MutableCopy(dict.get_ref(), flags as i32),
             }
         }
     }

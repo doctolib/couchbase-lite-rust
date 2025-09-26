@@ -183,7 +183,7 @@ do
                 ;;
 
             windows)
-                platformFolder="${libFolder}/x86_64-pc-windows-gnu"
+                platformFolder="${libFolder}/windows"
                 mkdir $platformFolder
 
                 libFile="${unzipPlatformFolder}/libcblite-${version}/lib/cblite.lib"
