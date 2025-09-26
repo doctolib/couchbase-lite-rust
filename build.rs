@@ -41,6 +41,38 @@ use std::path::PathBuf;
 use std::process::Command;
 use fs_extra::dir;
 
+// Custom callback to handle MSVC type mapping issues
+#[derive(Debug)]
+struct MSVCTypeCallback;
+
+impl bindgen::callbacks::ParseCallbacks for MSVCTypeCallback {
+    fn int_macro(&self, name: &str, value: i64) -> Option<bindgen::callbacks::IntKind> {
+        // Force unsigned macros and values to use u32 on MSVC
+        if name.contains("UINT")
+            || name.ends_with("_U")
+            || (value >= 0 && name.contains("UNSIGNED"))
+        {
+            Some(bindgen::callbacks::IntKind::U32)
+        } else {
+            None
+        }
+    }
+
+    fn item_name(&self, item_info: bindgen::callbacks::ItemInfo<'_>) -> Option<String> {
+        // Handle specific type mappings if needed
+        match item_info.name {
+            "c_uint" => Some("u32".to_string()),
+            "c_ulong" => Some("u32".to_string()),
+            _ => None,
+        }
+    }
+
+    // Chain with CargoCallbacks
+    fn include_file(&self, filename: &str) {
+        bindgen::CargoCallbacks::new().include_file(filename);
+    }
+}
+
 #[cfg(feature = "community")]
 static CBL_INCLUDE_DIR: &str = "libcblite_community/include";
 #[cfg(feature = "enterprise")]
@@ -101,6 +133,139 @@ enum OperatingSystem {
     Windows,
     Android,
     IOs,
+}
+
+fn find_msvc_paths() -> Result<(Option<String>, Option<String>), Box<dyn Error>> {
+    // Try to find MSVC installation paths automatically
+    let mut msvc_include = None;
+    let mut ucrt_include = None;
+
+    // Method 1: Use environment variables from Rust/Cargo build (preferred method)
+    if let Ok(include_path) = env::var("INCLUDE") {
+        // Parse the INCLUDE environment variable that MSVC sets
+        for path in include_path.split(';') {
+            let path = path.trim();
+            if !path.is_empty() {
+                if path.contains("VC\\Tools\\MSVC") && path.ends_with("include") {
+                    msvc_include = Some(path.to_string());
+                } else if path.contains("Windows Kits") && path.ends_with("ucrt") {
+                    ucrt_include = Some(path.to_string());
+                }
+            }
+        }
+    }
+
+    // Method 2: Try using vswhere.exe if available and no env vars found
+    if msvc_include.is_none()
+        && let Ok(output) = Command::new("vswhere.exe")
+            .args([
+                "-latest",
+                "-products",
+                "*",
+                "-requires",
+                "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                "-property",
+                "installationPath",
+            ])
+            .output()
+        && output.status.success()
+    {
+        let vs_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !vs_path.is_empty() {
+            // Try to find the MSVC version
+            let vc_tools_path = format!("{}\\VC\\Tools\\MSVC", vs_path);
+            if let Ok(entries) = fs::read_dir(&vc_tools_path) {
+                let mut versions = Vec::new();
+                for entry in entries.flatten() {
+                    if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                        let version_path = entry.path();
+                        let include_path = version_path.join("include");
+                        if include_path.exists() {
+                            let version = entry.file_name().to_string_lossy().to_string();
+                            versions.push((version, include_path.to_string_lossy().to_string()));
+                        }
+                    }
+                }
+                // Sort versions and take the latest
+                versions.sort_by(|a, b| b.0.cmp(&a.0));
+                if let Some((_, path)) = versions.first() {
+                    msvc_include = Some(path.clone());
+                }
+            }
+        }
+    }
+
+    // Method 3: Check common Visual Studio locations
+    if msvc_include.is_none() {
+        let common_vs_paths = [
+            "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC",
+            "C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC",
+            "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC",
+            "C:\\Program Files\\Microsoft Visual Studio\\2019\\Enterprise\\VC\\Tools\\MSVC",
+            "C:\\Program Files\\Microsoft Visual Studio\\2019\\Professional\\VC\\Tools\\MSVC",
+            "C:\\Program Files\\Microsoft Visual Studio\\2019\\Community\\VC\\Tools\\MSVC",
+        ];
+
+        for vs_path in &common_vs_paths {
+            if let Ok(entries) = fs::read_dir(vs_path) {
+                let mut versions = Vec::new();
+                for entry in entries.flatten() {
+                    if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                        let version_path = entry.path();
+                        let include_path = version_path.join("include");
+                        if include_path.exists() {
+                            let version = entry.file_name().to_string_lossy().to_string();
+                            versions.push((version, include_path.to_string_lossy().to_string()));
+                        }
+                    }
+                }
+                // Sort versions and take the latest
+                versions.sort_by(|a, b| b.0.cmp(&a.0));
+                if let Some((_, path)) = versions.first() {
+                    msvc_include = Some(path.clone());
+                    break;
+                }
+            }
+        }
+    }
+
+    // Method 4: Try to find Windows SDK UCRT if not found via env vars
+    if ucrt_include.is_none() {
+        let sdk_paths = [
+            "C:\\Program Files (x86)\\Windows Kits\\10\\Include",
+            "C:\\Program Files\\Windows Kits\\10\\Include",
+        ];
+
+        for sdk_path in &sdk_paths {
+            if let Ok(entries) = fs::read_dir(sdk_path) {
+                // Find the latest version
+                let mut versions = Vec::new();
+                for entry in entries.flatten() {
+                    if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                        let name = entry.file_name();
+                        let name_str = name.to_string_lossy();
+                        if name_str.starts_with("10.") {
+                            let ucrt_path = entry.path().join("ucrt");
+                            if ucrt_path.exists() {
+                                versions.push((
+                                    name_str.to_string(),
+                                    ucrt_path.to_string_lossy().to_string(),
+                                ));
+                            }
+                        }
+                    }
+                }
+                // Sort versions and take the latest
+                versions.sort_by(|a, b| b.0.cmp(&a.0));
+                if let Some((_, path)) = versions.first() {
+                    ucrt_include = Some(path.clone());
+                    break;
+                }
+            }
+        }
+    }
+
+    Ok((msvc_include, ucrt_include))
 }
 
 fn is_target(target: OperatingSystem) -> Result<bool, Box<dyn Error>> {
@@ -172,12 +337,39 @@ fn generate_bindings() -> Result<(), Box<dyn Error>> {
             .clang_arg(format!("--target={}", "x86_64-pc-windows-gnu"));
     }
 
-    bindings = bindings
-        .clang_arg("-IC:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.40.33807\\include".to_string())
-        .clang_arg("-IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.17763.0\\ucrt");
+    // Special handling for MSVC targets to fix unsigned type generation
+    if is_target(OperatingSystem::Windows)? {
+        // Try to auto-detect MSVC paths
+        let (msvc_include, ucrt_include) = find_msvc_paths()?;
+
+        if let Some(msvc_path) = msvc_include {
+            bindings = bindings.clang_arg(format!("-I{}", msvc_path));
+        } else {
+            eprintln!("Warning: Could not auto-detect MSVC include path, using fallback");
+            bindings = bindings.clang_arg("-IC:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.40.33807\\include");
+        }
+
+        if let Some(ucrt_path) = ucrt_include {
+            bindings = bindings.clang_arg(format!("-I{}", ucrt_path));
+        } else {
+            eprintln!("Warning: Could not auto-detect Windows SDK UCRT path, using fallback");
+            bindings = bindings.clang_arg(
+                "-IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.17763.0\\ucrt",
+            );
+        }
+
+        bindings = bindings
+            // Force unsigned types on MSVC
+            .clang_arg("-DUINT32=unsigned int")
+            .clang_arg("-DULONG=unsigned long")
+            // Ensure proper type detection
+            .clang_arg("-D_WIN32_WINNT=0x0601")
+            .blocklist_type("c_uint")
+            .blocklist_type("c_ulong");
+    }
 
     let out_dir = env::var("OUT_DIR")?;
-    bindings
+    let mut final_bindings = bindings
         .allowlist_type("CBL.*")
         .allowlist_type("FL.*")
         .allowlist_var("k?CBL.*")
@@ -186,7 +378,24 @@ fn generate_bindings() -> Result<(), Box<dyn Error>> {
         .allowlist_function("_?FL.*")
         .no_copy("FLSliceResult")
         .size_t_is_usize(true)
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        // Fix for MSVC: Force unsigned types to be generated as u32 instead of i32
+        .default_enum_style(bindgen::EnumVariation::Consts)
+        // Force constants to be generated as const u32 instead of complex enums
+        .translate_enum_integer_types(true);
+
+    // Add MSVC-specific type fixes
+    if is_target(OperatingSystem::Windows)? {
+        final_bindings = final_bindings
+            .raw_line("#[allow(non_camel_case_types)]")
+            .raw_line("pub type c_uint = u32;")
+            .raw_line("pub type c_ulong = u32;")
+            .raw_line("pub type DWORD = u32;")
+            .raw_line("pub type UINT = u32;")
+            .raw_line("pub type ULONG = u32;");
+    }
+
+    final_bindings
+        .parse_callbacks(Box::new(MSVCTypeCallback))
         .generate()
         .expect("Unable to generate bindings")
         .write_to_file(PathBuf::from(out_dir).join("bindings.rs"))

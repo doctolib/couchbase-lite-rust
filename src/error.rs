@@ -212,7 +212,7 @@ impl Error {
     }
 
     pub(crate) fn as_cbl_error(&self) -> CBLError {
-        let domain: i32;
+        let domain: u32;
         let code: i32;
         match &self.code {
             ErrorCode::CouchbaseLite(e) => {
@@ -278,7 +278,7 @@ impl fmt::Display for Error {
 
 impl ErrorCode {
     fn new(err: &CBLError) -> Self {
-        match i32::from(err.domain) {
+        match u32::from(err.domain) {
             kCBLDomain => CouchbaseLiteError::from_i32(err.code)
                 .map_or(Self::untranslatable(), Self::CouchbaseLite),
             kCBLNetworkDomain => {
