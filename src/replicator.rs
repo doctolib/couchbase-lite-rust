@@ -1182,6 +1182,7 @@ pub static DELETED: u32 = kCBLDocumentFlagsDeleted;
 pub static ACCESS_REMOVED: u32 = kCBLDocumentFlagsAccessRemoved;
 
 /** Information about a document that's been pushed or pulled. */
+#[derive(Debug)]
 pub struct ReplicatedDocument {
     pub id: String,        // The document ID
     pub flags: u32,        // Indicates whether the document was deleted or removed

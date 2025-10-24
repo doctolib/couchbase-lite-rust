@@ -97,9 +97,9 @@ pub fn with_db<F>(f: F)
 where
     F: Fn(&mut Database),
 {
-    init_logging();
-
     let _leak_checker = LeakChecker::new();
+
+    init_logging();
 
     {
         let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
@@ -182,9 +182,9 @@ impl ReplicationTwoDbsTester {
         replication_configuration: ReplicationTestConfiguration,
         context: Box<ReplicationConfigurationContext>,
     ) -> Self {
-        init_logging();
-
         let _leak_checker = LeakChecker::new();
+
+        init_logging();
 
         // Create databases
         let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
@@ -315,9 +315,9 @@ impl ReplicationThreeDbsTester {
         context_1: Box<ReplicationConfigurationContext>,
         context_2: Box<ReplicationConfigurationContext>,
     ) -> Self {
-        init_logging();
-
         let _leak_checker = LeakChecker::new();
+
+        init_logging();
 
         // Create databases
         let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");

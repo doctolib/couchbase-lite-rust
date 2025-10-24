@@ -27,4 +27,4 @@ jobs:
       - name: Run tests with Couchbase Lite C leak check
         run: LEAK_CHECK=y cargo test --features=${{ matrix.version }} --verbose -- --test-threads 1
       - name: Run tests (with address sanitizer)
-        run: LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nightly test --features=${{ matrix.version }} --verbose
+        run: LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nightly test --target x86_64-unknown-linux-gnu --features=${{ matrix.version }} --verbose
