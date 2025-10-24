@@ -17,12 +17,14 @@ jobs:
       - name: Install apt-get
         run: sudo apt-get install -y clang llvm
       - name: Install latest nightly
-        uses: dtolnay/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@888c2e1ea69ab0d4330cbf0af1ecc7b68f368cc1 # v1
         with:
             toolchain: nightly
             components: rustfmt, clippy
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
       - name: Run tests
         run: cargo test --features=${{ matrix.version }} --verbose
+      - name: Run tests with Couchbase Lite C leak check
+        run: LEAK_CHECK=y cargo test --features=${{ matrix.version }} --verbose -- --test-threads 1
       - name: Run tests (with address sanitizer)
         run: LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nightly test --features=${{ matrix.version }} --verbose

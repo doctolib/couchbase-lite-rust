@@ -19,10 +19,18 @@ pub struct Scope {
 impl Scope {
     pub const DEFAULT_NAME: &str = "_default";
 
-    pub(crate) fn retain(cbl_ref: *mut CBLScope) -> Self {
+    //////// CONSTRUCTORS:
+
+    /// Increase the reference counter of the CBL ref, so dropping the instance will NOT free the ref.
+    pub(crate) fn reference(cbl_ref: *mut CBLScope) -> Self {
         Self {
             cbl_ref: unsafe { retain(cbl_ref) },
         }
+    }
+
+    /// Takes ownership of the CBL ref, the reference counter is not increased so dropping the instance will free the ref.
+    pub(crate) const fn take_ownership(cbl_ref: *mut CBLScope) -> Self {
+        Self { cbl_ref }
     }
 
     /** Returns the name of the scope. */
@@ -36,7 +44,7 @@ impl Scope {
 
     /** Returns the scope's database */
     pub fn database(&self) -> Database {
-        unsafe { Database::wrap(CBLScope_Database(self.get_ref())) }
+        unsafe { Database::reference(CBLScope_Database(self.get_ref())) }
     }
 
     /** Returns the names of all collections in the scope. */
@@ -63,7 +71,7 @@ impl Scope {
             if collection.is_null() {
                 None
             } else {
-                Some(Collection::retain(collection))
+                Some(Collection::take_ownership(collection))
             }
         })
     }
@@ -84,6 +92,6 @@ impl Drop for Scope {
 
 impl Clone for Scope {
     fn clone(&self) -> Self {
-        Self::retain(self.get_ref())
+        Self::reference(self.get_ref())
     }
 }

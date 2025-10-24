@@ -28,9 +28,9 @@ use crate::{
 /// * The original key will be prefixed with 'encrypted$'.
 ///
 /// * The transformed Encryptable dictionary will contain `alg` property indicating
-///     the encryption algorithm, `ciphertext` property whose value is a base-64 string of the
-///     encrypted value, and optionally `kid` property indicating the encryption key identifier
-///     if specified when returning the result of PropertyEncryptor callback call.
+///   the encryption algorithm, `ciphertext` property whose value is a base-64 string of the
+///   encrypted value, and optionally `kid` property indicating the encryption key identifier
+///   if specified when returning the result of PropertyEncryptor callback call.
 ///
 /// For security reason, a document that contains Encryptable dictionaries will fail
 /// to push if their value cannot be encrypted including
@@ -66,18 +66,23 @@ impl CblRef for Encryptable {
 
 impl From<*mut CBLEncryptable> for Encryptable {
     fn from(cbl_ref: *mut CBLEncryptable) -> Self {
-        Self::retain(cbl_ref)
+        Self::take_ownership(cbl_ref)
     }
 }
 
 impl Encryptable {
     //////// CONSTRUCTORS:
 
-    /// Takes ownership of the object and increase it's reference counter.
-    pub(crate) fn retain(cbl_ref: *mut CBLEncryptable) -> Self {
+    /// Increase the reference counter of the CBL ref, so dropping the instance will NOT free the ref.
+    pub(crate) fn reference(cbl_ref: *mut CBLEncryptable) -> Self {
         Self {
             cbl_ref: unsafe { retain(cbl_ref) },
         }
+    }
+
+    /// Takes ownership of the CBL ref, the reference counter is not increased so dropping the instance will free the ref.
+    pub(crate) const fn take_ownership(cbl_ref: *mut CBLEncryptable) -> Self {
+        Self { cbl_ref }
     }
 
     ////////

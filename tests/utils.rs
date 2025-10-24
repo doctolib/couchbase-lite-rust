@@ -10,11 +10,7 @@ use std::{
 };
 #[cfg(feature = "enterprise")]
 use std::collections::HashMap;
-
-// Enables check for leaks of native CBL objects after `with_db()` finishes.
-// WARNING: These checks only work if one test method runs at a time, i.e. testing is single
-//          threaded. Run as `cargo test -- --test-threads=1` or you'll get false positives.
-const LEAK_CHECK: Option<&'static str> = option_env!("LEAK_CHECK");
+use couchbase_lite::{collection::Collection, logging::CustomLogSink};
 
 pub const DB_NAME: &str = "test_db";
 
@@ -31,9 +27,69 @@ fn logger(domain: logging::Domain, level: logging::Level, message: &str) {
 }
 
 pub fn init_logging() {
-    logging::set_callback(Some(logger));
-    logging::set_callback_level(logging::Level::Verbose);
-    logging::set_console_level(logging::Level::None);
+    logging::set_custom_log_sink(CustomLogSink {
+        level: logging::Level::Verbose,
+        callback: Some(logger),
+        domains: logging::DomainMask::ALL,
+    });
+    logging::set_console_log_sink(logging::ConsoleLogSink {
+        level: logging::Level::None,
+        domains: logging::DomainMask::ALL,
+    });
+}
+
+pub struct LeakChecker {
+    is_checking: bool,
+    start_instance_count: usize,
+    end_instance_count: usize,
+}
+
+impl Default for LeakChecker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LeakChecker {
+    pub fn new() -> Self {
+        if option_env!("LEAK_CHECK").is_some() {
+            LeakChecker {
+                is_checking: true,
+                start_instance_count: instance_count(),
+                end_instance_count: 0,
+            }
+        } else {
+            LeakChecker {
+                is_checking: false,
+                start_instance_count: 0,
+                end_instance_count: 0,
+            }
+        }
+    }
+}
+
+impl Drop for LeakChecker {
+    fn drop(&mut self) {
+        if self.is_checking {
+            println!("Checking if Couchbase Lite objects were leaked by this test");
+            self.end_instance_count = instance_count();
+
+            if self.start_instance_count != self.end_instance_count {
+                println!("Leaks detected :-(");
+                println!(
+                    "Instances before: {} | Instances after: {}",
+                    self.start_instance_count, self.end_instance_count
+                );
+                dump_instances();
+                panic!("Memory leaks detected");
+                // NOTE: This failure is likely to happen if the tests run multi-threaded, as happens by
+                // default. Looking for changes in the `instance_count()` is intrinsically not thread safe.
+                // Either run tests with `cargo test -- --test-threads`, or turn off `LEAK_CHECKS`.
+            } else {
+                println!("All good :-)");
+            }
+        }
+    }
 }
 
 // Test wrapper function -- takes care of creating and deleting the database.
@@ -43,33 +99,21 @@ where
 {
     init_logging();
 
-    let start_inst_count = instance_count() as isize;
-    let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
-    let cfg = DatabaseConfiguration {
-        directory: tmp_dir.path(),
-        #[cfg(feature = "enterprise")]
-        encryption_key: None,
-    };
-    let mut db = Database::open(DB_NAME, Some(cfg)).expect("open db");
-    assert!(Database::exists(DB_NAME, tmp_dir.path()));
+    let _leak_checker = LeakChecker::new();
 
-    f(&mut db);
+    {
+        let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
+        let cfg = DatabaseConfiguration {
+            directory: tmp_dir.path(),
+            #[cfg(feature = "enterprise")]
+            encryption_key: None,
+        };
+        let mut db = Database::open(DB_NAME, Some(cfg)).expect("open db");
+        assert!(Database::exists(DB_NAME, tmp_dir.path()));
 
-    db.delete().unwrap();
+        f(&mut db);
 
-    if LEAK_CHECK.is_some() {
-        warn!("Couchbase Lite objects were leaked by this test");
-        dump_instances();
-        assert_eq!(
-            instance_count() as usize,
-            start_inst_count as usize,
-            "Native object leak: {} objects, was {}",
-            instance_count(),
-            start_inst_count
-        );
-        // NOTE: This failure is likely to happen if the tests run multi-threaded, as happens by
-        // default. Looking for changes in the `instance_count()` is intrinsically not thread safe.
-        // Either run tests with `cargo test -- --test-threads`, or turn off `LEAK_CHECKS`.
+        db.delete().unwrap();
     }
 }
 
@@ -116,6 +160,8 @@ fn generate_replication_configuration(
         document_ids: config.document_ids,
         collections: None,
         accept_parent_domain_cookies: false,
+        #[cfg(feature = "enterprise")]
+        accept_only_self_signed_server_certificate: false,
     }
 }
 
@@ -126,6 +172,8 @@ pub struct ReplicationTwoDbsTester {
     central_database: Database,
     replicator: Replicator,
     replicator_continuous: bool,
+    // Keep _leak_checker at the end, fields in a struct are dropped in declaration order
+    _leak_checker: LeakChecker,
 }
 
 #[cfg(feature = "enterprise")]
@@ -135,6 +183,8 @@ impl ReplicationTwoDbsTester {
         context: Box<ReplicationConfigurationContext>,
     ) -> Self {
         init_logging();
+
+        let _leak_checker = LeakChecker::new();
 
         // Create databases
         let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
@@ -177,6 +227,7 @@ impl ReplicationTwoDbsTester {
             central_database,
             replicator,
             replicator_continuous,
+            _leak_checker,
         }
     }
 
@@ -252,6 +303,8 @@ pub struct ReplicationThreeDbsTester {
     replicator_1_continuous: bool,
     replicator_2: Replicator,
     replicator_2_continuous: bool,
+    // Keep _leak_checker at the end, fields in a struct are dropped in declaration order
+    _leak_checker: LeakChecker,
 }
 
 #[cfg(feature = "enterprise")]
@@ -263,6 +316,8 @@ impl ReplicationThreeDbsTester {
         context_2: Box<ReplicationConfigurationContext>,
     ) -> Self {
         init_logging();
+
+        let _leak_checker = LeakChecker::new();
 
         // Create databases
         let tmp_dir = TempDir::new("cbl_rust").expect("create temp dir");
@@ -325,6 +380,7 @@ impl ReplicationThreeDbsTester {
             replicator_1_continuous,
             replicator_2,
             replicator_2_continuous,
+            _leak_checker,
         }
     }
 
@@ -432,8 +488,14 @@ pub fn add_doc(db: &mut Database, id: &str, i: i64, s: &str) {
     let mut props = doc.mutable_properties();
     props.at("i").put_i64(i);
     props.at("s").put_string(s);
-    db.save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
+    db.default_collection_or_error()
+        .unwrap()
+        .save_document_with_concurency_control(&mut doc, ConcurrencyControl::FailOnConflict)
         .expect("save");
+}
+
+pub fn default_collection(db: &Database) -> Collection {
+    db.default_collection_or_error().unwrap()
 }
 
 // Static

@@ -49,6 +49,7 @@ impl<T> CblRef for Slice<T> {
 }
 
 impl<T> Slice<T> {
+    /// Takes ownership of the slice, the reference counter is not increased so dropping the instance will free the ref.
     pub(crate) const fn wrap(slice: FLSlice, owner: T) -> Self {
         Self {
             cbl_ref: slice,
@@ -82,11 +83,10 @@ impl<T> Slice<T> {
 
 impl<T> Debug for Slice<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Slice")
-            .field("dump", unsafe {
-                &FLData_Dump(self.get_ref()).to_string().unwrap_or_default()
-            })
-            .finish()
+        unsafe {
+            let s = FLData_Dump(self.get_ref()).to_string().unwrap_or_default();
+            f.debug_struct("Slice").field("dump", &s).finish()
+        }
     }
 }
 
@@ -126,22 +126,24 @@ impl FLSlice {
         if !self {
             return None;
         }
-        Some(std::slice::from_raw_parts(self.buf.cast::<u8>(), self.size))
+        Some(unsafe { std::slice::from_raw_parts(self.buf.cast::<u8>(), self.size) })
     }
 
     pub(crate) unsafe fn as_str<'a>(&self) -> Option<&'a str> {
-        match self.as_byte_array() {
-            None => None,
-            Some(b) => str::from_utf8(b).ok(),
+        unsafe {
+            match self.as_byte_array() {
+                None => None,
+                Some(b) => str::from_utf8(b).ok(),
+            }
         }
     }
 
     pub(crate) unsafe fn to_string(self) -> Option<String> {
-        self.as_str().map(std::string::ToString::to_string)
+        unsafe { self.as_str().map(std::string::ToString::to_string) }
     }
 
     pub(crate) unsafe fn to_vec(self) -> Option<Vec<u8>> {
-        self.as_byte_array().map(std::borrow::ToOwned::to_owned)
+        unsafe { self.as_byte_array().map(std::borrow::ToOwned::to_owned) }
     }
 
     pub(crate) fn map<F, T>(&self, f: F) -> Option<T>
@@ -188,12 +190,12 @@ impl FLSliceResult {
 
     // Consumes & releases self
     pub unsafe fn to_string(self) -> Option<String> {
-        self.as_slice().to_string()
+        unsafe { self.as_slice().to_string() }
     }
 
     // Consumes & releases self
     pub unsafe fn to_vec(self) -> Option<Vec<u8>> {
-        self.as_slice().to_vec()
+        unsafe { self.as_slice().to_vec() }
     }
 }
 
@@ -217,14 +219,16 @@ impl Drop for FLSliceResult {
 
 // Convenience to convert a raw `char*` to an unowned `&str`
 pub unsafe fn to_str<'a>(cstr: *const ::std::os::raw::c_char) -> Cow<'a, str> {
-    CStr::from_ptr(cstr).to_string_lossy()
+    unsafe { CStr::from_ptr(cstr).to_string_lossy() }
 }
 
 // Convenience to convert a raw `char*` to an owned String
 pub unsafe fn to_string(cstr: *const ::std::os::raw::c_char) -> String {
-    to_str(cstr).to_string()
+    unsafe { to_str(cstr).to_string() }
 }
 
 pub unsafe fn free_cstr(cstr: *const ::std::os::raw::c_char) {
-    drop_in_place(cstr as *mut ::std::os::raw::c_char);
+    unsafe {
+        drop_in_place(cstr as *mut ::std::os::raw::c_char);
+    }
 }

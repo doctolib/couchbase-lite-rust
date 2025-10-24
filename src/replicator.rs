@@ -25,7 +25,7 @@ use std::{
 };
 use crate::{
     CblRef, Database, Dict, Document, Error, ListenerToken, MutableDict, Result, check_error,
-    release, retain,
+    release,
     slice::{from_str, self},
     c_api::{
         CBLListener_Remove, CBLAuth_CreatePassword, CBLAuth_CreateSession, CBLAuthenticator,
@@ -47,7 +47,7 @@ use crate::{
 };
 #[cfg(feature = "enterprise")]
 use crate::{
-    CouchbaseLiteError, ErrorCode, error,
+    CouchbaseLiteError, ErrorCode,
     c_api::{
         CBLEndpoint_CreateWithLocalDB, FLSlice, FLSliceResult, FLSliceResult_New, FLSlice_Copy,
         FLStringResult,
@@ -103,6 +103,14 @@ impl Clone for Endpoint {
         Self {
             cbl_ref: self.cbl_ref,
             url: self.url.clone(),
+        }
+    }
+}
+
+impl Drop for Endpoint {
+    fn drop(&mut self) {
+        unsafe {
+            release(self.get_ref());
         }
     }
 }
@@ -255,20 +263,22 @@ impl CblRef for ProxySettings {
 /** A callback that can decide whether a particular document should be pushed or pulled. */
 pub type ReplicationFilter = Box<dyn Fn(&Document, bool, bool) -> bool>;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn c_replication_push_filter(
     context: *mut ::std::os::raw::c_void,
     document: *mut CBLDocument,
     flags: CBLDocumentFlags,
 ) -> bool {
     let repl_conf_context = context as *const ReplicationConfigurationContext;
-    let document = Document::retain(document.cast::<CBLDocument>());
+    let document = Document::reference(document.cast::<CBLDocument>());
     let (is_deleted, is_access_removed) = read_document_flags(flags);
 
-    (*repl_conf_context)
-        .push_filter
-        .as_ref()
-        .is_some_and(|callback| callback(&document, is_deleted, is_access_removed))
+    unsafe {
+        (*repl_conf_context)
+            .push_filter
+            .as_ref()
+            .is_some_and(|callback| callback(&document, is_deleted, is_access_removed))
+    }
 }
 unsafe extern "C" fn c_replication_pull_filter(
     context: *mut ::std::os::raw::c_void,
@@ -276,13 +286,15 @@ unsafe extern "C" fn c_replication_pull_filter(
     flags: CBLDocumentFlags,
 ) -> bool {
     let repl_conf_context = context as *const ReplicationConfigurationContext;
-    let document = Document::retain(document.cast::<CBLDocument>());
+    let document = Document::reference(document.cast::<CBLDocument>());
     let (is_deleted, is_access_removed) = read_document_flags(flags);
 
-    (*repl_conf_context)
-        .pull_filter
-        .as_ref()
-        .is_some_and(|callback| callback(&document, is_deleted, is_access_removed))
+    unsafe {
+        (*repl_conf_context)
+            .pull_filter
+            .as_ref()
+            .is_some_and(|callback| callback(&document, is_deleted, is_access_removed))
+    }
 }
 fn read_document_flags(flags: CBLDocumentFlags) -> (bool, bool) {
     (flags & DELETED != 0, flags & ACCESS_REMOVED != 0)
@@ -303,25 +315,27 @@ unsafe extern "C" fn c_replication_conflict_resolver(
 ) -> *const CBLDocument {
     let repl_conf_context = context as *const ReplicationConfigurationContext;
 
-    let doc_id = document_id.to_string().unwrap_or_default();
-    let local_document = if local_document.is_null() {
-        None
-    } else {
-        Some(Document::retain(local_document as *mut CBLDocument))
-    };
-    let remote_document = if remote_document.is_null() {
-        None
-    } else {
-        Some(Document::retain(remote_document as *mut CBLDocument))
-    };
+    unsafe {
+        let doc_id = document_id.to_string().unwrap_or_default();
+        let local_document = if local_document.is_null() {
+            None
+        } else {
+            Some(Document::reference(local_document as *mut CBLDocument))
+        };
+        let remote_document = if remote_document.is_null() {
+            None
+        } else {
+            Some(Document::reference(remote_document as *mut CBLDocument))
+        };
 
-    (*repl_conf_context)
-        .conflict_resolver
-        .as_ref()
-        .map_or(ptr::null(), |callback| {
-            callback(&doc_id, local_document, remote_document)
-                .map_or(ptr::null(), |d| d.get_ref() as *const CBLDocument)
-        })
+        (*repl_conf_context)
+            .conflict_resolver
+            .as_ref()
+            .map_or(ptr::null(), |callback| {
+                callback(&doc_id, local_document, remote_document)
+                    .map_or(ptr::null(), |d| d.get_ref() as *const CBLDocument)
+            })
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -345,7 +359,7 @@ pub type DefaultCollectionPropertyEncryptor = fn(
     kid: Option<String>,
     error: &Error,
 ) -> std::result::Result<Vec<u8>, EncryptionError>;
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[cfg(feature = "enterprise")]
 pub extern "C" fn c_default_collection_property_encryptor(
     context: *mut ::std::os::raw::c_void,
@@ -381,14 +395,12 @@ pub extern "C" fn c_default_collection_property_encryptor(
                     Err(err) => {
                         match err {
                             EncryptionError::Temporary => {
-                                error!("Encryption callback returned with transient error");
                                 error = Error {
                                     code: ErrorCode::WebSocket(503),
                                     internal_info: None,
                                 };
                             }
                             EncryptionError::Permanent => {
-                                error!("Encryption callback returned with non transient error");
                                 error = Error::cbl_error(CouchbaseLiteError::Crypto);
                             }
                         }
@@ -397,7 +409,6 @@ pub extern "C" fn c_default_collection_property_encryptor(
                     }
                 });
         } else {
-            error!("Encryption input is None");
             error = Error::cbl_error(CouchbaseLiteError::Crypto);
         }
 
@@ -424,7 +435,7 @@ pub type CollectionPropertyEncryptor = fn(
     kid: Option<String>,
     error: &Error,
 ) -> std::result::Result<Vec<u8>, EncryptionError>;
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[cfg(feature = "enterprise")]
 pub extern "C" fn c_collection_property_encryptor(
     context: *mut ::std::os::raw::c_void,
@@ -464,14 +475,12 @@ pub extern "C" fn c_collection_property_encryptor(
                     Err(err) => {
                         match err {
                             EncryptionError::Temporary => {
-                                error!("Encryption callback returned with transient error");
                                 error = Error {
                                     code: ErrorCode::WebSocket(503),
                                     internal_info: None,
                                 };
                             }
                             EncryptionError::Permanent => {
-                                error!("Encryption callback returned with non transient error");
                                 error = Error::cbl_error(CouchbaseLiteError::Crypto);
                             }
                         }
@@ -480,7 +489,6 @@ pub extern "C" fn c_collection_property_encryptor(
                     }
                 });
         } else {
-            error!("Encryption input is None");
             error = Error::cbl_error(CouchbaseLiteError::Crypto);
         }
 
@@ -506,7 +514,7 @@ pub type DefaultCollectionPropertyDecryptor = fn(
     kid: Option<String>,
     error: &Error,
 ) -> std::result::Result<Vec<u8>, EncryptionError>;
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[cfg(feature = "enterprise")]
 pub extern "C" fn c_default_collection_property_decryptor(
     context: *mut ::std::os::raw::c_void,
@@ -542,14 +550,12 @@ pub extern "C" fn c_default_collection_property_decryptor(
                     Err(err) => {
                         match err {
                             EncryptionError::Temporary => {
-                                error!("Decryption callback returned with transient error");
                                 error = Error {
                                     code: ErrorCode::WebSocket(503),
                                     internal_info: None,
                                 };
                             }
                             EncryptionError::Permanent => {
-                                error!("Decryption callback returned with non transient error");
                                 error = Error::cbl_error(CouchbaseLiteError::Crypto);
                             }
                         }
@@ -558,7 +564,6 @@ pub extern "C" fn c_default_collection_property_decryptor(
                     }
                 });
         } else {
-            error!("Decryption input is None");
             error = Error::cbl_error(CouchbaseLiteError::Crypto);
         }
 
@@ -585,7 +590,7 @@ pub type CollectionPropertyDecryptor = fn(
     kid: Option<String>,
     error: &Error,
 ) -> std::result::Result<Vec<u8>, EncryptionError>;
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[cfg(feature = "enterprise")]
 pub extern "C" fn c_collection_property_decryptor(
     context: *mut ::std::os::raw::c_void,
@@ -625,14 +630,12 @@ pub extern "C" fn c_collection_property_decryptor(
                     Err(err) => {
                         match err {
                             EncryptionError::Temporary => {
-                                error!("Decryption callback returned with transient error");
                                 error = Error {
                                     code: ErrorCode::WebSocket(503),
                                     internal_info: None,
                                 };
                             }
                             EncryptionError::Permanent => {
-                                error!("Decryption callback returned with non transient error");
                                 error = Error::cbl_error(CouchbaseLiteError::Crypto);
                             }
                         }
@@ -641,7 +644,6 @@ pub extern "C" fn c_collection_property_decryptor(
                     }
                 });
         } else {
-            error!("Decryption input is None");
             error = Error::cbl_error(CouchbaseLiteError::Crypto);
         }
 
@@ -743,6 +745,10 @@ pub struct ReplicatorConfiguration {
     This option is disabled by default (see \ref kCBLDefaultReplicatorAcceptParentCookies) which means
     that the parent-domain cookies are not permitted to save by default. */
     pub accept_parent_domain_cookies: bool,
+    /** Specify the replicator to accept only self-signed certs. Any non-self-signed certs will be rejected
+    to avoid accidentally using this mode with the non-self-signed certs in production. */
+    #[cfg(feature = "enterprise")]
+    pub accept_only_self_signed_server_certificate: bool,
 }
 
 //======== LIFECYCLE
@@ -786,7 +792,7 @@ impl Replicator {
                 database: config
                     .database
                     .as_ref()
-                    .map(|d| retain(d.get_ref()))
+                    .map(|d| d.get_ref())
                     .unwrap_or(ptr::null_mut()),
                 endpoint: config.endpoint.get_ref(),
                 replicatorType: config.replicator_type.clone().into(),
@@ -853,6 +859,9 @@ impl Replicator {
                 },
                 collectionCount: collections.as_ref().map(|c| c.len()).unwrap_or_default(),
                 acceptParentDomainCookies: config.accept_parent_domain_cookies,
+                #[cfg(feature = "enterprise")]
+                acceptOnlySelfSignedServerCertificate: config
+                    .accept_only_self_signed_server_certificate,
                 context: std::ptr::addr_of!(*context) as *mut _,
             };
 
@@ -1120,15 +1129,17 @@ impl From<CBLReplicatorStatus> for ReplicatorStatus {
 
 /** A callback that notifies you when the replicator's status changes. */
 pub type ReplicatorChangeListener = Box<dyn Fn(ReplicatorStatus)>;
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn c_replicator_change_listener(
     context: *mut ::std::os::raw::c_void,
     _replicator: *mut CBLReplicator,
     status: *const CBLReplicatorStatus,
 ) {
     let callback = context as *const ReplicatorChangeListener;
-    let status: ReplicatorStatus = (*status).into();
-    (*callback)(status);
+    unsafe {
+        let status: ReplicatorStatus = (*status).into();
+        (*callback)(status);
+    }
 }
 
 /** A callback that notifies you when documents are replicated. */
@@ -1148,20 +1159,22 @@ unsafe extern "C" fn c_replicator_document_change_listener(
         Direction::Pulled
     };
 
-    let repl_documents = std::slice::from_raw_parts(documents, num_documents as usize)
-        .iter()
-        .filter_map(|document| {
-            document.ID.to_string().map(|doc_id| ReplicatedDocument {
-                id: doc_id,
-                flags: document.flags,
-                error: check_error(&document.error),
-                scope: document.scope.to_string(),
-                collection: document.collection.to_string(),
+    unsafe {
+        let repl_documents = std::slice::from_raw_parts(documents, num_documents as usize)
+            .iter()
+            .filter_map(|document| {
+                document.ID.to_string().map(|doc_id| ReplicatedDocument {
+                    id: doc_id,
+                    flags: document.flags,
+                    error: check_error(&document.error),
+                    scope: document.scope.to_string(),
+                    collection: document.collection.to_string(),
+                })
             })
-        })
-        .collect();
+            .collect();
 
-    (*callback)(direction, repl_documents);
+        (*callback)(direction, repl_documents);
+    }
 }
 
 /** Flags describing a replicated document. */

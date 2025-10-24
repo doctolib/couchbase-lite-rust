@@ -23,9 +23,13 @@
 // - https://doc.rust-lang.org/cargo/reference/build-scripts.html
 
 #[cfg(all(not(feature = "community"), not(feature = "enterprise")))]
-compile_error!("You need to have one the following features activated: community, enterprise");
+compile_error!(
+    "You need to have at least one the following features activated: community, enterprise"
+);
 #[cfg(all(feature = "community", feature = "enterprise"))]
-compile_error!("You need to have one the following features activated: community, enterprise");
+compile_error!(
+    "You need to have at most one the following features activated: community, enterprise"
+);
 
 extern crate bindgen;
 extern crate fs_extra;
@@ -163,6 +167,15 @@ fn generate_bindings() -> Result<(), Box<dyn Error>> {
             String::from_utf8_lossy(&homebrew_prefix[..homebrew_prefix.len() - 1]);
         let mingw_path = format!("{homebrew_prefix}/toolchain-x86_64/x86_64-w64-mingw32");
         let mingw_include_path = format!("{mingw_path}/include");
+        bindings = bindings
+            .clang_arg(format!("-I{}", mingw_include_path))
+            .clang_arg(format!("--target={}", "x86_64-pc-windows-gnu"));
+    }
+
+    if is_host(OperatingSystem::Windows)? && is_target(OperatingSystem::Windows)? {
+        let mingw_path = env::var("MINGW64_DIR")
+            .expect("Please set MINGW64_DIR to the location of your mingw64 installation ");
+        let mingw_include_path = format!("{mingw_path}\\include");
         bindings = bindings
             .clang_arg(format!("-I{}", mingw_include_path))
             .clang_arg(format!("--target={}", "x86_64-pc-windows-gnu"));

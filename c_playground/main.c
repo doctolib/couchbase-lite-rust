@@ -23,9 +23,11 @@ void log_callback(CBLLogDomain domain, CBLLogLevel level, FLString message) {
 }
 
 int main(void) {
-    CBLLog_SetCallbackLevel(kCBLLogVerbose);
-    CBLLog_SetConsoleLevel(kCBLLogVerbose);
-    CBLLog_SetCallback(log_callback);
+    CBLConsoleLogSink log_sink = {};
+    log_sink.level = kCBLLogDebug;
+    log_sink.domains = kCBLLogDomainMaskAll;
+
+    CBLLogSinks_SetConsole(log_sink);
 
     // Open database
     CBLError error;

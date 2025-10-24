@@ -54,11 +54,11 @@ mod c_api;
 
 use self::c_api::{
     CBLListenerToken, CBLRefCounted, CBL_DumpInstances, CBL_InstanceCount, CBL_Release, CBL_Retain,
-    CBLListener_Remove, CBLITE_VERSION,
+    CBLListener_Remove, CBL_Now, CBLITE_VERSION,
 };
 #[cfg(target_os = "android")]
 use self::c_api::{CBLError, CBLInitContext, CBL_Init};
-use std::ffi::CStr;
+use std::{ffi::CStr, time::Duration};
 
 //////// RE-EXPORT:
 
@@ -78,9 +78,32 @@ pub trait CblRef {
     fn get_ref(&self) -> Self::Output;
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 /// A time value for document expiration. Defined as milliseconds since the Unix epoch (1/1/1970.)
-pub struct Timestamp(pub i64);
+pub struct Timestamp {
+    pub(crate) timestamp: i64,
+}
+
+impl Timestamp {
+    pub fn now() -> Timestamp {
+        Timestamp {
+            timestamp: unsafe { CBL_Now() },
+        }
+    }
+
+    /// Create a Timestamp from milliseconds since the Unix epoch (1/1/1970.)
+    pub(crate) fn new(milliseconds_from_epoch: i64) -> Self {
+        Timestamp {
+            timestamp: milliseconds_from_epoch,
+        }
+    }
+
+    pub fn add(&self, duration: Duration) -> Self {
+        Timestamp {
+            timestamp: self.timestamp + duration.as_millis() as i64,
+        }
+    }
+}
 
 pub struct Listener<T> {
     pub listener_token: ListenerToken,
@@ -145,11 +168,13 @@ pub fn dump_instances() {
 //////// REFCOUNT SUPPORT (INTERNAL)
 
 pub(crate) unsafe fn retain<T>(cbl_ref: *mut T) -> *mut T {
-    CBL_Retain(cbl_ref.cast::<CBLRefCounted>()).cast::<T>()
+    unsafe { CBL_Retain(cbl_ref.cast::<CBLRefCounted>()).cast::<T>() }
 }
 
 pub(crate) unsafe fn release<T>(cbl_ref: *mut T) {
-    CBL_Release(cbl_ref.cast::<CBLRefCounted>());
+    unsafe {
+        CBL_Release(cbl_ref.cast::<CBLRefCounted>());
+    }
 }
 
 //////// ANDROID INIT

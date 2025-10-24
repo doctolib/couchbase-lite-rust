@@ -41,17 +41,19 @@ pub enum QueryLanguage {
 
 type ChangeListener = Box<dyn Fn(&Query, &ListenerToken)>;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn c_query_change_listener(
     context: *mut ::std::os::raw::c_void,
     query: *mut CBLQuery,
     token: *mut CBLListenerToken,
 ) {
     let callback = context as *const ChangeListener;
-    let query = Query::wrap(query.cast::<CBLQuery>());
+    let query = Query::reference(query.cast::<CBLQuery>());
     let token = ListenerToken::new(token);
 
-    (*callback)(&query, &token);
+    unsafe {
+        (*callback)(&query, &token);
+    }
 }
 
 /** A compiled database query. */
@@ -88,14 +90,20 @@ impl Query {
                 return failure(err);
             }
 
-            Ok(Self { cbl_ref: q })
+            Ok(Self::take_ownership(q))
         }
     }
 
-    pub(crate) fn wrap(cbl_ref: *mut CBLQuery) -> Self {
+    /// Increase the reference counter of the CBL ref, so dropping the instance will NOT free the ref.
+    pub(crate) fn reference(cbl_ref: *mut CBLQuery) -> Self {
         Self {
             cbl_ref: unsafe { retain(cbl_ref) },
         }
+    }
+
+    /// Takes ownership of the CBL ref, the reference counter is not increased so dropping the instance will free the ref.
+    pub(crate) const fn take_ownership(cbl_ref: *mut CBLQuery) -> Self {
+        Self { cbl_ref }
     }
 
     /** Assigns values to the query's parameters.

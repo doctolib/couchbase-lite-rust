@@ -132,7 +132,7 @@ enum_from_primitive! {
 #[deprecated(note = "please use `CollectionChangeListener` on default collection instead")]
 type DatabaseChangeListener = Box<dyn Fn(&Database, Vec<String>)>;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn c_database_change_listener(
     context: *mut ::std::os::raw::c_void,
     db: *const CBLDatabase,
@@ -140,28 +140,32 @@ unsafe extern "C" fn c_database_change_listener(
     c_doc_ids: *mut FLString,
 ) {
     let callback = context as *const DatabaseChangeListener;
-    let database = Database::retain(db as *mut CBLDatabase);
+    let database = Database::reference(db as *mut CBLDatabase);
 
-    let doc_ids = std::slice::from_raw_parts(c_doc_ids, num_docs as usize)
-        .iter()
-        .filter_map(|doc_id| doc_id.to_string())
-        .collect();
+    unsafe {
+        let doc_ids = std::slice::from_raw_parts(c_doc_ids, num_docs as usize)
+            .iter()
+            .filter_map(|doc_id| doc_id.to_string())
+            .collect();
 
-    (*callback)(&database, doc_ids);
+        (*callback)(&database, doc_ids);
+    }
 }
 
 /// Callback indicating that the database (or an object belonging to it) is ready to call one or more listeners.
 type BufferNotifications = fn(db: &Database);
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn c_database_buffer_notifications(
     context: *mut ::std::os::raw::c_void,
     db: *mut CBLDatabase,
 ) {
-    let callback: BufferNotifications = std::mem::transmute(context);
+    unsafe {
+        let callback: BufferNotifications = std::mem::transmute(context);
 
-    let database = Database::retain(db.cast::<CBLDatabase>());
+        let database = Database::reference(db.cast::<CBLDatabase>());
 
-    callback(&database);
+        callback(&database);
+    }
 }
 
 /// A connection to an open database
@@ -180,15 +184,15 @@ impl CblRef for Database {
 impl Database {
     //////// CONSTRUCTORS:
 
-    /// Takes ownership of the object and increase it's reference counter.
-    pub(crate) fn retain(cbl_ref: *mut CBLDatabase) -> Self {
+    /// Increase the reference counter of the CBL ref, so dropping the instance will NOT free the ref.
+    pub(crate) fn reference(cbl_ref: *mut CBLDatabase) -> Self {
         Self {
             cbl_ref: unsafe { retain(cbl_ref) },
         }
     }
 
-    /// References the object without taking ownership and increasing it's reference counter
-    pub(crate) const fn wrap(cbl_ref: *mut CBLDatabase) -> Self {
+    /// Takes ownership of the CBL ref, the reference counter is not increased so dropping the instance will free the ref.
+    pub(crate) const fn take_ownership(cbl_ref: *mut CBLDatabase) -> Self {
         Self { cbl_ref }
     }
 
@@ -213,11 +217,13 @@ impl Database {
 
     unsafe fn _open(name: &str, config_ptr: *const CBLDatabaseConfiguration) -> Result<Self> {
         let mut err = CBLError::default();
-        let db_ref = CBLDatabase_Open(from_str(name).get_ref(), config_ptr, &mut err);
-        if db_ref.is_null() {
-            return failure(err);
+        unsafe {
+            let db_ref = CBLDatabase_Open(from_str(name).get_ref(), config_ptr, &mut err);
+            if db_ref.is_null() {
+                return failure(err);
+            }
+            Ok(Self::take_ownership(db_ref))
         }
-        Ok(Self::wrap(db_ref))
     }
 
     //////// OTHER STATIC METHODS:
@@ -347,6 +353,15 @@ impl Database {
         result
     }
 
+    /// Creates a new transaction that can be committed or rolled back manually.
+    /// Returns a Transaction object that must be committed explicitly, otherwise
+    /// it will be rolled back when dropped.
+    ///
+    /// For simpler cases, consider using `in_transaction()` instead.
+    pub fn begin_transaction(&mut self) -> Result<Transaction> {
+        Transaction::new(self.get_ref())
+    }
+
     /// Encrypts or decrypts a database, or changes its encryption key.
     #[cfg(feature = "enterprise")]
     pub fn change_encryption_key(&mut self, encryption_key: &EncryptionKey) -> Result<()> {
@@ -418,7 +433,7 @@ impl Database {
             if scope.is_null() {
                 None
             } else {
-                Some(Scope::retain(scope))
+                Some(Scope::take_ownership(scope))
             }
         })
     }
@@ -445,7 +460,7 @@ impl Database {
             if collection.is_null() {
                 None
             } else {
-                Some(Collection::retain(collection))
+                Some(Collection::take_ownership(collection))
             }
         })
     }
@@ -474,7 +489,7 @@ impl Database {
             )
         };
 
-        check_error(&error).map(|()| Collection::retain(collection))
+        check_error(&error).map(|()| Collection::take_ownership(collection))
     }
 
     /// Delete an existing collection.
@@ -499,7 +514,7 @@ impl Database {
         let mut error = CBLError::default();
         let scope = unsafe { CBLDatabase_DefaultScope(self.get_ref(), &mut error) };
 
-        check_error(&error).map(|()| Scope::retain(scope))
+        check_error(&error).map(|()| Scope::take_ownership(scope))
     }
 
     /// Returns the default collection.
@@ -511,7 +526,7 @@ impl Database {
             if collection.is_null() {
                 None
             } else {
-                Some(Collection::retain(collection))
+                Some(Collection::take_ownership(collection))
             }
         })
     }
@@ -526,7 +541,7 @@ impl Database {
         if collection.is_null() {
             Err(Error::cbl_error(CouchbaseLiteError::NotFound))
         } else {
-            Ok(Collection::retain(collection))
+            Ok(Collection::take_ownership(collection))
         }
     }
 
@@ -588,6 +603,51 @@ impl Database {
     }
 }
 
+/// A database transaction that can be committed or rolled back.
+/// When dropped without being committed, the transaction is automatically rolled back.
+pub struct Transaction {
+    db_ref: *mut CBLDatabase,
+    committed: bool,
+}
+
+impl Transaction {
+    fn new(db_ref: *mut CBLDatabase) -> Result<Self> {
+        unsafe {
+            let mut err = CBLError::default();
+            if !CBLDatabase_BeginTransaction(db_ref, &mut err) {
+                return failure(err);
+            }
+        }
+        Ok(Transaction {
+            db_ref,
+            committed: false,
+        })
+    }
+
+    /// Commits the transaction, making all changes permanent.
+    pub fn commit(mut self) -> Result<()> {
+        unsafe {
+            let mut err = CBLError::default();
+            if !CBLDatabase_EndTransaction(self.db_ref, true, &mut err) {
+                return failure(err);
+            }
+        }
+        self.committed = true;
+        Ok(())
+    }
+}
+
+impl Drop for Transaction {
+    fn drop(&mut self) {
+        if !self.committed {
+            unsafe {
+                let mut err = CBLError::default();
+                let _ = CBLDatabase_EndTransaction(self.db_ref, false, &mut err);
+            }
+        }
+    }
+}
+
 impl Drop for Database {
     fn drop(&mut self) {
         unsafe { release(self.get_ref()) }
@@ -596,6 +656,6 @@ impl Drop for Database {
 
 impl Clone for Database {
     fn clone(&self) -> Self {
-        Self::retain(self.get_ref())
+        Self::reference(self.get_ref())
     }
 }

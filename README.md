@@ -20,14 +20,17 @@ Installation instructions are [here][BINDGEN_INSTALL].
 
 ### 2. Build!
 
-You can use Couchbase Lite C community or entreprise editions:
+There two different editions of Couchbase Lite C: community & enterprise.
+You can find the differences [here][CBL_EDITIONS_DIFF].
 
-```shell
-$ cargo build --features=enterprise
-```
+When building or declaring this repository as a dependency, you need to specify the edition through a cargo feature:
 
 ```shell
 $ cargo build --features=community
+```
+
+```shell
+$ cargo build --features=enterprise
 ```
 
 ## Maintaining
@@ -35,7 +38,7 @@ $ cargo build --features=community
 ### Couchbase Lite For C
 
 The Couchbase Lite For C shared library and headers ([Git repo][CBL_C]) are already embedded in this repo.
-They are present in the directory `libcblite`.
+They are present in two directories, one for each edition: `libcblite_community` & `libcblite_enterprise`.
 
 ### Upgrade Couchbase Lite C
 
@@ -44,34 +47,56 @@ The different releases can be found in [this page][CBL_DOWNLOAD_PAGE].
 When a new C release is available, a new Rust release must be created. Running the following script will download and setup the libraries locally:
 
 ```shell
-$ ./update_cblite_c.sh -v 3.2.1
+$ ./update_cblite_c.sh -v 3.2.2
 ```
 
-If the script fails on MacOS, you might need to install wget or a recent bash version:
+If the script fails (for example `declare: -A: invalid option`, you'll need bash >= version 4) on MacOS, you might need to install wget or a recent bash version:
 
 ```shell
 $ brew install wget
 $ brew install bash
 ```
 
-After that, fix the compilation & tests and you can create a pull request.
+If the script was successful:
+- Change the link `CBL_API_REFERENCE` in this README
+- Change the version in the test `couchbase_lite_c_version_test`
+- Update the version in `Cargo.toml`
+- Fix the compilation in both editions
+- Fix the tests in both editions
+- Create pull request
 
 New C features should also be added to the Rust API at some point.
 
 ### Test
 
-**The unit tests must be run single-threaded.** This is because each test case checks for leaks by
-counting the number of extant Couchbase Lite objects before and after it runs, and failing if the
-number increases. That works only if a single test runs at a time.
+Tests can be found in the `tests` subdirectory.
+Test are run in the GitHub wrokflow `Test`. You can find the commands used there.
+
+There are three variations:
+
+### Nominal run
 
 ```shell
-$ LEAK_CHECK=y cargo test -- --test-threads 1
+$ cargo test --features=enterprise
 ```
 
-### Sanitizer
+### Run with Couchbase Lite C leak check
+
+Couchbase Lite C allows checking if instances of their objects are still alive through the functions `CBL_InstanceCount` & `CBL_DumpInstances`.
+If the `LEAK_CHECK` environment variable is set, we check that the number of instances at the end of each test is 0.
+
+If this step fails in one of your pull requests, you should look into the `take_ownership`/`reference` logic on CBL pointers in the constructor of the Rust structs:
+- `take_ownership` takes ownership of the pointer, it will not increase the ref count of the `ref` CBL pointer so releasing it (in a `drop` for example) will free the pointer
+- `reference` just references the pointer, it will increase the ref count of CBL pointers so releasing it will not free the pointer
 
 ```shell
-$ LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nightly test 
+$ LEAK_CHECK=y cargo test --features=enterprise -- --test-threads 1
+```
+
+### Run with address sanitizer
+
+```shell
+$ LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nightly test  --features=enterprise
 ```
 
 ## Learning
@@ -94,7 +119,9 @@ $ LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nigh
 
 [CBL_DOCS]: https://docs.couchbase.com/couchbase-lite/current/introduction.html
 
-[CBL_API_REFERENCE]: https://docs.couchbase.com/mobile/3.2.1/couchbase-lite-c/C/html/modules.html
+[CBL_API_REFERENCE]: https://docs.couchbase.com/mobile/3.2.3/couchbase-lite-c/C/html/modules.html
+
+[CBL_EDITIONS_DIFF]: https://www.couchbase.com/products/editions/
 
 [FLEECE]: https://github.com/couchbaselabs/fleece/wiki/Using-Fleece
 

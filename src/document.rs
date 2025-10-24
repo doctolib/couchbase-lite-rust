@@ -66,18 +66,20 @@ pub enum ConcurrencyControl {
 /// (probably by a pull replicator, or by application code on another thread)
 /// since it was loaded into the CBLDocument being saved.
 type ConflictHandler = fn(&mut Document, &Document) -> bool;
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn c_conflict_handler(
     context: *mut ::std::os::raw::c_void,
     document_being_saved: *mut CBLDocument,
     conflicting_document: *const CBLDocument,
 ) -> bool {
-    let callback: ConflictHandler = std::mem::transmute(context);
+    unsafe {
+        let callback: ConflictHandler = std::mem::transmute(context);
 
-    callback(
-        &mut Document::retain(document_being_saved),
-        &Document::retain(conflicting_document as *mut CBLDocument),
-    )
+        callback(
+            &mut Document::reference(document_being_saved),
+            &Document::reference(conflicting_document as *mut CBLDocument),
+        )
+    }
 }
 
 ///  A document change listener lets you detect changes made to a specific document after they
@@ -85,15 +87,17 @@ unsafe extern "C" fn c_conflict_handler(
 #[deprecated(note = "please use `CollectionDocumentChangeListener` instead")]
 type DatabaseDocumentChangeListener = Box<dyn Fn(&Database, Option<String>)>;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn c_database_document_change_listener(
     context: *mut ::std::os::raw::c_void,
     db: *const CBLDatabase,
     c_doc_id: FLString,
 ) {
-    let callback = context as *const DatabaseDocumentChangeListener;
-    let database = Database::retain(db as *mut CBLDatabase);
-    (*callback)(&database, c_doc_id.to_string());
+    unsafe {
+        let callback = context as *const DatabaseDocumentChangeListener;
+        let database = Database::reference(db as *mut CBLDatabase);
+        (*callback)(&database, c_doc_id.to_string());
+    }
 }
 
 //////// DATABASE'S DOCUMENT API:
@@ -116,7 +120,7 @@ impl Database {
                     failure(error)
                 };
             }
-            Ok(Document::wrap(doc))
+            Ok(Document::take_ownership(doc))
         }
     }
 
@@ -232,7 +236,7 @@ impl Database {
         }
     }
 
-    /// Returns the time, if any, at which a given document will expire and be purged.
+    /// Returns the time, if any, at which a given document will expire and be purged in milliseconds since the Unix epoch (1/1/1970.).
     /// Documents don't normally expire; you have to call `set_document_expiration`
     /// to set a document's expiration time.
     #[deprecated(note = "please use `document_expiration` on default collection instead")]
@@ -246,7 +250,7 @@ impl Database {
             );
             match exp {
                 0 => Ok(None),
-                _ if exp > 0 => Ok(Some(Timestamp(exp))),
+                _ if exp > 0 => Ok(Some(Timestamp::new(exp))),
                 _ => failure(error),
             }
         }
@@ -256,7 +260,7 @@ impl Database {
     #[deprecated(note = "please use `set_document_expiration` on default collection instead")]
     pub fn set_document_expiration(&mut self, doc_id: &str, when: Option<Timestamp>) -> Result<()> {
         let exp: i64 = match when {
-            Some(Timestamp(n)) => n,
+            Some(Timestamp { timestamp }) => timestamp,
             _ => 0,
         };
         unsafe {
@@ -308,15 +312,17 @@ impl Database {
 /// are persisted to the collection.
 type CollectionDocumentChangeListener = Box<dyn Fn(Collection, Option<String>)>;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn c_collection_document_change_listener(
     context: *mut ::std::os::raw::c_void,
     change: *const CBLDocumentChange,
 ) {
     let callback = context as *const CollectionDocumentChangeListener;
-    if let Some(change) = change.as_ref() {
-        let collection = Collection::retain(change.collection as *mut CBLCollection);
-        (*callback)(collection, change.docID.to_string());
+    unsafe {
+        if let Some(change) = change.as_ref() {
+            let collection = Collection::reference(change.collection as *mut CBLCollection);
+            (*callback)(collection, change.docID.to_string());
+        }
     }
 }
 
@@ -340,7 +346,7 @@ impl Collection {
                     failure(error)
                 };
             }
-            Ok(Document::wrap(doc))
+            Ok(Document::take_ownership(doc))
         }
     }
 
@@ -442,7 +448,7 @@ impl Collection {
         }
     }
 
-    /// Returns the time, if any, at which a given document will expire and be purged.
+    /// Returns the time, if any, at which a given document will expire and be purged in milliseconds since the Unix epoch (1/1/1970.).
     /// Documents don't normally expire; you have to call set_document_expiration
     /// to set a document's expiration time.
     pub fn document_expiration(&self, doc_id: &str) -> Result<Option<Timestamp>> {
@@ -455,16 +461,16 @@ impl Collection {
             );
             match exp {
                 0 => Ok(None),
-                _ if exp > 0 => Ok(Some(Timestamp(exp))),
+                _ if exp > 0 => Ok(Some(Timestamp::new(exp))),
                 _ => failure(error),
             }
         }
     }
 
-    /// Sets or clears the expiration time of a document.
+    /// Sets or clears the expiration time of a document in milliseconds since the Unix epoch (1/1/1970.).
     pub fn set_document_expiration(&mut self, doc_id: &str, when: Option<Timestamp>) -> Result<()> {
         let exp: i64 = match when {
-            Some(Timestamp(n)) => n,
+            Some(Timestamp { timestamp }) => timestamp,
             _ => 0,
         };
         unsafe {
@@ -515,17 +521,17 @@ impl Document {
     /// Creates a new, empty document in memory, with an automatically generated unique ID.
     /// It will not be added to a database until saved.
     pub fn new() -> Self {
-        unsafe { Self::wrap(CBLDocument_Create()) }
+        unsafe { Self::take_ownership(CBLDocument_Create()) }
     }
 
     /// Creates a new, empty document in memory, with the given ID.
     /// It will not be added to a database until saved.
     pub fn new_with_id(id: &str) -> Self {
-        unsafe { Self::wrap(CBLDocument_CreateWithID(from_str(id).get_ref())) }
+        unsafe { Self::take_ownership(CBLDocument_CreateWithID(from_str(id).get_ref())) }
     }
 
-    /// Takes ownership of the object and increase it's reference counter.
-    pub(crate) fn retain(cbl_ref: *mut CBLDocument) -> Self {
+    /// Increase the reference counter of the CBL ref, so dropping the instance will NOT free the ref.
+    pub(crate) fn reference(cbl_ref: *mut CBLDocument) -> Self {
         unsafe {
             Self {
                 cbl_ref: retain(cbl_ref),
@@ -533,8 +539,8 @@ impl Document {
         }
     }
 
-    /// References the object without taking ownership and increasing it's reference counter
-    pub(crate) const fn wrap(cbl_ref: *mut CBLDocument) -> Self {
+    /// Takes ownership of the CBL ref, the reference counter is not increased so dropping the instance will free the ref.
+    pub(crate) const fn take_ownership(cbl_ref: *mut CBLDocument) -> Self {
         Self { cbl_ref }
     }
 
@@ -607,6 +613,6 @@ impl Drop for Document {
 
 impl Clone for Document {
     fn clone(&self) -> Self {
-        Self::retain(self.get_ref())
+        Self::reference(self.get_ref())
     }
 }
