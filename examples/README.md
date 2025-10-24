@@ -12,7 +12,7 @@ The configuration files that might interest you are:
 - `docker-conf/db-config.json` -> contains the database configuration
 - `docker-conf/sync-function.js` -> contains the sync function used by the Sync Gateway
 
-To start both the Sync Gatewawy and Couchbase Server, move to `docker-conf` through a terminal and use:
+To start both the Sync Gateway and Couchbase Server, move to `docker-conf` through a terminal and use:
 
 ```shell
 $ docker-compose up
@@ -44,16 +44,11 @@ $ curl -XPUT -v "http://localhost:4985/my-db/" -H 'Content-Type: application/jso
 
 ## Running an example
 
-As of now, there is only one example: `sgw_1_cblite`.
+As of now, there is only one example: `ticket_70596`.
 
 It can be run with the following command:
 ```shell
-$ cargo run --features=enterprise --example sgw_1_cblite
+$ cargo run --features=enterprise --example ticket_70596
 ```
 
-What it does:
-- Create a cblite database `test1`
-- Add a user `great_name` to the Sync Gateway
-- Retrieve a session token for the user `great_name` from the Sync Gateway
-- Start a continuous push & pull replicator
-- Create a document, then wait for 5 seconds for the replication to finish
+There are utility functions available to interact with the Sync Gateway or Couchbase Server, feel free to add more if needed.
