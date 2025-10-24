@@ -43,6 +43,7 @@ fn main() {
         document_ids: MutableArray::default(),
         collections: None,
         accept_parent_domain_cookies: false,
+        #[cfg(feature = "enterprise")]
         accept_only_self_signed_server_certificate: false,
     };
     let repl_context = ReplicationConfigurationContext::default();
