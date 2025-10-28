@@ -6,3 +6,5 @@ Cargo.lock
 
 # MacOS directory conf
 .DS_Store
+
+*.cblite2/
