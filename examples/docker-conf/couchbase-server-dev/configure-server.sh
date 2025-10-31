@@ -49,6 +49,21 @@ function bucketCreate() {
     fi
 }
 
+function configureBucketCompaction() {
+    # Configure metadata purge interval to 1 hour (0.04 days) - CBS minimum
+    # This is important for tombstone purge testing with Sync Gateway
+    # Default is 3 days, which is too long for testing
+    couchbase-cli setting-compaction \
+        -c 127.0.0.1:8091 \
+        --username $COUCHBASE_ADMINISTRATOR_USERNAME \
+        --password $COUCHBASE_ADMINISTRATOR_PASSWORD \
+        --bucket $COUCHBASE_BUCKET \
+        --metadata-purge-interval 0.04
+    if [[ $? != 0 ]]; then
+        return 1
+    fi
+}
+
 function userSgCreate() {
     couchbase-cli user-manage \
         -c 127.0.0.1:8091 \
@@ -99,6 +114,15 @@ function main() {
         exit 1
       fi
       echo "Creating the bucket [OK]"
+      echo
+
+      echo "Configuring bucket compaction settings...."
+      retry configureBucketCompaction
+      if [[ $? != 0 ]]; then
+        echo "Bucket compaction config failed. Exiting." >&2
+        exit 1
+      fi
+      echo "Configuring bucket compaction settings [OK]"
       echo
 
       echo "Creating Sync Gateway user...."
