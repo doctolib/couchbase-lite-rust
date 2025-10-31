@@ -31,18 +31,22 @@ pub fn get_session(name: &str) -> String {
 }
 
 pub fn get_doc_rev(doc_id: &str) -> Option<String> {
-    let url = format!("{SYNC_GW_URL_ADMIN}/{doc_id}");
+    // Try to get the document, including deleted/tombstone versions
+    let url = format!("{SYNC_GW_URL_ADMIN}/{doc_id}?deleted=true");
     let result = reqwest::blocking::Client::new().get(&url).send();
 
     match result {
         Ok(response) => {
-            println!("Get doc revision result: {response:?}");
-            if response.status().is_success() {
+            let status = response.status();
+            println!("Get doc revision result: status={status}");
+            if status.is_success() {
                 let json: serde_json::Value = response.json().unwrap();
                 let rev = json["_rev"].as_str().unwrap().to_string();
-                println!("get_doc_rev for {doc_id}: found rev {rev}");
+                let is_deleted = json["_deleted"].as_bool().unwrap_or(false);
+                println!("get_doc_rev for {doc_id}: found rev {rev} (deleted: {is_deleted})");
                 Some(rev)
             } else {
+                println!("get_doc_rev for {doc_id}: status {status}, document not found");
                 None
             }
         }
