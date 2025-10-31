@@ -227,7 +227,14 @@ pub fn set_metadata_purge_interval(days: f64) {
     }
 
     let url = format!("{CBS_URL}/pools/default/buckets/{CBS_BUCKET}");
-    let params = [("metadataPurgeInterval", days.to_string())];
+
+    // IMPORTANT: Must set autoCompactionDefined=true to enable per-bucket override
+    // parallelDBAndViewCompaction is also required by the API
+    let params = [
+        ("autoCompactionDefined", "true"),
+        ("purgeInterval", &days.to_string()),
+        ("parallelDBAndViewCompaction", "false"),
+    ];
 
     let response = reqwest::blocking::Client::new()
         .post(&url)
