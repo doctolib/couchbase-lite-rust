@@ -48,12 +48,18 @@ fn main() {
     println!("✓ doc1 deleted locally\n");
 
     // STEP 3: Purge tombstone from SGW
+    // Note: This step may fail if SGW doesn't have the tombstone (404).
+    // This can happen if:
+    // - The tombstone only exists in CBS, not in SGW's cache
+    // - SGW auto-purged it very quickly
+    // This is not blocking for the test objective (verifying flags=0 on re-create).
     println!("STEP 3: Purging tombstone from SGW...");
     if let Some(tombstone_rev) = get_doc_rev("doc1") {
         purge_doc_from_sgw("doc1", &tombstone_rev);
         println!("✓ Tombstone purged from SGW (rev: {tombstone_rev})\n");
     } else {
-        println!("⚠ Could not get tombstone revision from SGW\n");
+        println!("⚠ Could not get tombstone revision from SGW");
+        println!("  This is not blocking - tombstone may not exist in SGW or was auto-purged\n");
     }
 
     // STEP 4: Configure CBS metadata purge interval to ~5 minutes
