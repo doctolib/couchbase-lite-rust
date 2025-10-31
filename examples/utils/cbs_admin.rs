@@ -42,9 +42,11 @@ pub fn compact_cbs_bucket() {
 
 pub fn check_doc_in_cbs(doc_id: &str) {
     // Use port 8093 for Query service (not 8091 which is admin/REST API)
+    // Query XATTRs to see tombstones in shared bucket access mode
+    // The _sync xattr contains Sync Gateway metadata including deleted status
     let url = "http://localhost:8093/query/service";
     let query = format!(
-        "SELECT META().id, META().deleted FROM `{CBS_BUCKET}` WHERE META().id = '{doc_id}'"
+        "SELECT META().id, META().xattrs._sync.deleted as deleted FROM `{CBS_BUCKET}` USE KEYS ['{doc_id}']"
     );
     let body = serde_json::json!({"statement": query});
 
@@ -63,12 +65,25 @@ pub fn check_doc_in_cbs(doc_id: &str) {
                     if let Some(results) = json["results"].as_array() {
                         if results.is_empty() {
                             println!(
-                                "CBS check for {doc_id}: ✓ Document not found (successfully purged)"
+                                "CBS check for {doc_id}: ✓ Document not found (completely purged)"
                             );
                         } else {
                             println!("CBS check for {doc_id}: Found {} result(s)", results.len());
                             for result in results {
-                                println!("  - {}", serde_json::to_string_pretty(result).unwrap());
+                                let is_deleted = result["deleted"].as_bool().unwrap_or(false);
+                                if is_deleted {
+                                    println!("  - Document exists as TOMBSTONE (deleted: true)");
+                                    println!(
+                                        "    {}",
+                                        serde_json::to_string_pretty(result).unwrap()
+                                    );
+                                } else {
+                                    println!("  - Document exists as LIVE document");
+                                    println!(
+                                        "    {}",
+                                        serde_json::to_string_pretty(result).unwrap()
+                                    );
+                                }
                             }
                         }
                     } else {
