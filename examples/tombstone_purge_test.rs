@@ -140,6 +140,7 @@ fn main() {
     );
 }
 
+#[allow(deprecated)]
 fn create_doc(db: &mut Database, id: &str, channel: &str) {
     let mut doc = Document::new_with_id(id);
     doc.set_properties_as_json(
@@ -162,6 +163,7 @@ fn create_doc(db: &mut Database, id: &str, channel: &str) {
     );
 }
 
+#[allow(deprecated)]
 fn get_doc(db: &Database, id: &str) -> Result<Document> {
     db.get_document(id)
 }
