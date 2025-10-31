@@ -62,3 +62,42 @@ pub fn check_doc_in_cbs(doc_id: &str) {
         Err(e) => println!("CBS check error: {e}"),
     }
 }
+
+pub fn set_metadata_purge_interval(days: f64) {
+    const MIN_PURGE_INTERVAL_DAYS: f64 = 0.04; // 1 hour minimum per CBS spec
+
+    if days < MIN_PURGE_INTERVAL_DAYS {
+        println!(
+            "⚠ Warning: CBS metadata purge interval minimum is {MIN_PURGE_INTERVAL_DAYS} days (1 hour)."
+        );
+        println!(
+            "  Requested: {days} days (~{:.1} minutes)",
+            days * 24.0 * 60.0
+        );
+        println!("  CBS may not enforce purge before the minimum interval.");
+        println!("  Proceeding with requested value for testing purposes...\n");
+    }
+
+    let url = format!("{CBS_URL}/pools/default/buckets/{CBS_BUCKET}");
+    let params = [("metadataPurgeInterval", days.to_string())];
+
+    let response = reqwest::blocking::Client::new()
+        .post(&url)
+        .basic_auth(CBS_ADMIN_USER, Some(CBS_ADMIN_PWD))
+        .form(&params)
+        .send();
+
+    match response {
+        Ok(resp) => {
+            let status = resp.status();
+            if let Ok(body) = resp.text() {
+                println!(
+                    "Set metadata purge interval to {days} days: status={status}, body={body}"
+                );
+            } else {
+                println!("Set metadata purge interval to {days} days: status={status}");
+            }
+        }
+        Err(e) => println!("Set metadata purge interval error: {e}"),
+    }
+}
