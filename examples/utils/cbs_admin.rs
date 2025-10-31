@@ -44,9 +44,13 @@ pub fn check_doc_in_cbs(doc_id: &str) {
     // Use port 8093 for Query service (not 8091 which is admin/REST API)
     // Query XATTRs to see tombstones in shared bucket access mode
     // The _sync xattr contains Sync Gateway metadata including deleted status
+    //
+    // WARNING: Querying _sync xattr directly is UNSUPPORTED in production per Sync Gateway docs
+    // This is only for testing/debugging purposes. The _sync structure can change between versions.
+    // Reference: https://docs.couchbase.com/sync-gateway/current/shared-bucket-access.html
     let url = "http://localhost:8093/query/service";
     let query = format!(
-        "SELECT META().id, META().xattrs._sync.deleted as deleted FROM `{CBS_BUCKET}` USE KEYS ['{doc_id}']"
+        "SELECT META().id, META().xattrs._sync._deleted as deleted FROM `{CBS_BUCKET}` USE KEYS ['{doc_id}']"
     );
     let body = serde_json::json!({"statement": query});
 
