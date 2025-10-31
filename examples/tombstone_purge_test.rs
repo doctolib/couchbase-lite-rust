@@ -4,6 +4,7 @@ use std::path::Path;
 use couchbase_lite::*;
 use utils::*;
 
+#[allow(deprecated)]
 fn main() {
     println!("=== Tombstone Purge Test (FULL - 1 hour) ===");
     println!("This test validates complete tombstone purge following Thomas's recommendation.");

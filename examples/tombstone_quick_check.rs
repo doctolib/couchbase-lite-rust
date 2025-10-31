@@ -4,6 +4,7 @@ use couchbase_lite::*;
 use std::path::Path;
 use utils::*;
 
+#[allow(deprecated)]
 fn main() {
     println!("=== Tombstone Quick Check (30 seconds) ===");
     println!("This is a rapid validation test for tombstone detection via XATTRs.\n");

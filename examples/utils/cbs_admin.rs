@@ -49,8 +49,11 @@ pub fn check_doc_in_cbs(doc_id: &str) {
     // This is only for testing/debugging purposes. The _sync structure can change between versions.
     // Reference: https://docs.couchbase.com/sync-gateway/current/shared-bucket-access.html
     let url = "http://localhost:8093/query/service";
+
+    // Query the entire _sync xattr to see its structure
+    // This helps debug what fields are actually available
     let query = format!(
-        "SELECT META().id, META().xattrs._sync._deleted as deleted FROM `{CBS_BUCKET}` USE KEYS ['{doc_id}']"
+        "SELECT META().id, META().xattrs._sync as sync_metadata FROM `{CBS_BUCKET}` USE KEYS ['{doc_id}']"
     );
     let body = serde_json::json!({"statement": query});
 
@@ -74,17 +77,53 @@ pub fn check_doc_in_cbs(doc_id: &str) {
                         } else {
                             println!("CBS check for {doc_id}: Found {} result(s)", results.len());
                             for result in results {
-                                let is_deleted = result["deleted"].as_bool().unwrap_or(false);
-                                if is_deleted {
-                                    println!("  - Document exists as TOMBSTONE (deleted: true)");
-                                    println!(
-                                        "    {}",
-                                        serde_json::to_string_pretty(result).unwrap()
-                                    );
+                                // Display the full sync_metadata to understand its structure
+                                if let Some(sync_meta) = result.get("sync_metadata") {
+                                    if sync_meta.is_null() {
+                                        println!(
+                                            "  ⚠ sync_metadata is NULL - may lack permissions to read system xattrs"
+                                        );
+                                        println!(
+                                            "  💡 System xattrs (starting with _) may require special RBAC roles"
+                                        );
+                                    } else {
+                                        println!("  📦 Full _sync xattr content:");
+                                        println!(
+                                            "{}",
+                                            serde_json::to_string_pretty(sync_meta).unwrap()
+                                        );
+
+                                        // Detect tombstone status from _sync.flags field
+                                        // flags == 1 indicates a deleted/tombstone document
+                                        // Other indicators: tombstoned_at field, channels.*.del == true
+                                        let flags = sync_meta
+                                            .get("flags")
+                                            .and_then(|v| v.as_i64())
+                                            .unwrap_or(0);
+
+                                        let has_tombstoned_at =
+                                            sync_meta.get("tombstoned_at").is_some();
+
+                                        let is_tombstone = flags == 1 || has_tombstoned_at;
+
+                                        if is_tombstone {
+                                            println!("\n  ✓ Document is TOMBSTONE");
+                                            println!("     - flags: {}", flags);
+                                            if has_tombstoned_at {
+                                                println!(
+                                                    "     - tombstoned_at: {}",
+                                                    sync_meta["tombstoned_at"]
+                                                );
+                                            }
+                                        } else {
+                                            println!("\n  ✓ Document is LIVE");
+                                            println!("     - flags: {}", flags);
+                                        }
+                                    }
                                 } else {
-                                    println!("  - Document exists as LIVE document");
+                                    println!("  ⚠ No sync_metadata field in result");
                                     println!(
-                                        "    {}",
+                                        "  Full result: {}",
                                         serde_json::to_string_pretty(result).unwrap()
                                     );
                                 }
