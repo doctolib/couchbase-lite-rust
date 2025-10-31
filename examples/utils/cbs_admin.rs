@@ -41,22 +41,44 @@ pub fn compact_cbs_bucket() {
 }
 
 pub fn check_doc_in_cbs(doc_id: &str) {
-    let url = format!("{CBS_URL}:8093/query/service");
+    // Use port 8093 for Query service (not 8091 which is admin/REST API)
+    let url = "http://localhost:8093/query/service";
     let query = format!(
         "SELECT META().id, META().deleted FROM `{CBS_BUCKET}` WHERE META().id = '{doc_id}'"
     );
     let body = serde_json::json!({"statement": query});
 
     let response = reqwest::blocking::Client::new()
-        .post(&url)
+        .post(url)
         .basic_auth(CBS_ADMIN_USER, Some(CBS_ADMIN_PWD))
         .json(&body)
         .send();
 
     match response {
         Ok(resp) => {
+            let status = resp.status();
             if let Ok(text) = resp.text() {
-                println!("CBS check for {doc_id}: {text}");
+                // Parse the response to show results more clearly
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if let Some(results) = json["results"].as_array() {
+                        if results.is_empty() {
+                            println!(
+                                "CBS check for {doc_id}: ✓ Document not found (successfully purged)"
+                            );
+                        } else {
+                            println!("CBS check for {doc_id}: Found {} result(s)", results.len());
+                            for result in results {
+                                println!("  - {}", serde_json::to_string_pretty(result).unwrap());
+                            }
+                        }
+                    } else {
+                        println!("CBS check for {doc_id}: status={status}, response={text}");
+                    }
+                } else {
+                    println!("CBS check for {doc_id}: status={status}, response={text}");
+                }
+            } else {
+                println!("CBS check for {doc_id}: status={status}, could not read response");
             }
         }
         Err(e) => println!("CBS check error: {e}"),
