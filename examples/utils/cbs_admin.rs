@@ -143,6 +143,74 @@ pub fn check_doc_in_cbs(doc_id: &str) {
     }
 }
 
+pub fn get_metadata_purge_interval() {
+    let url = format!("{CBS_URL}/pools/default/buckets/{CBS_BUCKET}");
+
+    let response = reqwest::blocking::Client::new()
+        .get(&url)
+        .basic_auth(CBS_ADMIN_USER, Some(CBS_ADMIN_PWD))
+        .send();
+
+    match response {
+        Ok(resp) => {
+            let status = resp.status();
+            if let Ok(text) = resp.text() {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                    // Search for purgeInterval in multiple possible locations
+                    let locations = vec![
+                        (
+                            "autoCompactionSettings.purgeInterval",
+                            json.get("autoCompactionSettings")
+                                .and_then(|a| a.get("purgeInterval")),
+                        ),
+                        ("purgeInterval", json.get("purgeInterval")),
+                    ];
+
+                    let mut found = false;
+                    for (path, value) in locations {
+                        if let Some(purge_interval) = value {
+                            println!(
+                                "✓ CBS metadata purge interval (at {path}): {}",
+                                purge_interval
+                            );
+                            if let Some(days) = purge_interval.as_f64() {
+                                println!(
+                                    "  = {days} days (~{:.1} hours, ~{:.0} minutes)",
+                                    days * 24.0,
+                                    days * 24.0 * 60.0
+                                );
+                            }
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if !found {
+                        println!("⚠ purgeInterval not found in bucket config");
+                        if let Some(auto_compact) = json.get("autoCompactionSettings") {
+                            println!("  autoCompactionSettings content:");
+                            println!("  {}", serde_json::to_string_pretty(auto_compact).unwrap());
+                        }
+                        println!("\n  Searching for 'purge' related fields...");
+                        if let Some(obj) = json.as_object() {
+                            for (key, value) in obj {
+                                if key.to_lowercase().contains("purge") {
+                                    println!("  Found: {} = {}", key, value);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    println!("Get metadata purge interval: status={status}, could not parse JSON");
+                }
+            } else {
+                println!("Get metadata purge interval: status={status}, could not read response");
+            }
+        }
+        Err(e) => println!("Get metadata purge interval error: {e}"),
+    }
+}
+
 pub fn set_metadata_purge_interval(days: f64) {
     const MIN_PURGE_INTERVAL_DAYS: f64 = 0.04; // 1 hour minimum per CBS spec
 
@@ -180,4 +248,8 @@ pub fn set_metadata_purge_interval(days: f64) {
         }
         Err(e) => println!("Set metadata purge interval error: {e}"),
     }
+
+    // Verify the setting was applied
+    println!("\nVerifying configuration:");
+    get_metadata_purge_interval();
 }

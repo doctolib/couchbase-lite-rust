@@ -53,12 +53,21 @@ function configureBucketCompaction() {
     # Configure metadata purge interval to 1 hour (0.04 days) - CBS minimum
     # This is important for tombstone purge testing with Sync Gateway
     # Default is 3 days, which is too long for testing
-    couchbase-cli setting-compaction \
-        -c 127.0.0.1:8091 \
-        --username $COUCHBASE_ADMINISTRATOR_USERNAME \
-        --password $COUCHBASE_ADMINISTRATOR_PASSWORD \
-        --bucket $COUCHBASE_BUCKET \
-        --metadata-purge-interval 0.04
+    #
+    # IMPORTANT: Must use REST API to configure per-bucket auto-compaction
+    # The couchbase-cli setting-compaction command only sets cluster-wide defaults
+    #
+    # Required parameters:
+    # - autoCompactionDefined=true: Enable per-bucket auto-compaction override
+    # - purgeInterval=0.04: Metadata purge interval (1 hour minimum)
+    # - parallelDBAndViewCompaction: Required parameter for auto-compaction
+    curl -X POST \
+        -u "$COUCHBASE_ADMINISTRATOR_USERNAME:$COUCHBASE_ADMINISTRATOR_PASSWORD" \
+        "http://127.0.0.1:8091/pools/default/buckets/$COUCHBASE_BUCKET" \
+        -d "autoCompactionDefined=true" \
+        -d "purgeInterval=0.04" \
+        -d "parallelDBAndViewCompaction=false"
+
     if [[ $? != 0 ]]; then
         return 1
     fi
