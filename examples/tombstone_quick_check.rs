@@ -79,6 +79,7 @@ fn main() {
     println!("=== Quick check complete ===");
 }
 
+#[allow(deprecated)]
 fn create_doc(db: &mut Database, id: &str, channel: &str) {
     let mut doc = Document::new_with_id(id);
     doc.set_properties_as_json(
