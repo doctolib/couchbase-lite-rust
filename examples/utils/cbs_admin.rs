@@ -40,6 +40,30 @@ pub fn compact_cbs_bucket() {
     }
 }
 
+pub fn get_sync_xattr(doc_id: &str) -> Option<serde_json::Value> {
+    let url = "http://localhost:8093/query/service";
+    let query = format!(
+        "SELECT META().xattrs._sync as sync_metadata FROM `{CBS_BUCKET}` USE KEYS ['{doc_id}']"
+    );
+    let body = serde_json::json!({"statement": query});
+
+    let response = reqwest::blocking::Client::new()
+        .post(url)
+        .basic_auth(CBS_ADMIN_USER, Some(CBS_ADMIN_PWD))
+        .json(&body)
+        .send()
+        .ok()?;
+
+    let text = response.text().ok()?;
+    let json: serde_json::Value = serde_json::from_str(&text).ok()?;
+
+    json.get("results")?
+        .as_array()?
+        .first()?
+        .get("sync_metadata")
+        .cloned()
+}
+
 pub fn check_doc_in_cbs(doc_id: &str) {
     // Use port 8093 for Query service (not 8091 which is admin/REST API)
     // Query XATTRs to see tombstones in shared bucket access mode
