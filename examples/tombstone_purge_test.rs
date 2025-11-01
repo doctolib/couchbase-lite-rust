@@ -1,7 +1,7 @@
 mod utils;
 
-use std::path::Path;
 use couchbase_lite::*;
+use std::path::Path;
 use utils::*;
 
 #[allow(deprecated)]
@@ -9,6 +9,41 @@ fn main() {
     println!("=== Tombstone Purge Test (FULL - 1 hour) ===");
     println!("This test validates complete tombstone purge following Thomas's recommendation.");
     println!("Total runtime: ~65-70 minutes\n");
+
+    // SETUP: Check git status
+    println!("SETUP: Checking git status...");
+    let git_info = match check_git_status() {
+        Ok(info) => {
+            println!("✓ Git status clean (commit: {})\n", info.commit_short_sha);
+            info
+        }
+        Err(e) => {
+            eprintln!("✗ Git check failed:\n{}", e);
+            eprintln!("\nPlease commit changes before running this test.");
+            std::process::exit(1);
+        }
+    };
+
+    // SETUP: Rebuild Docker environment
+    println!("SETUP: Rebuilding Docker environment with correct configuration...");
+    if let Err(e) = ensure_clean_environment() {
+        eprintln!("✗ Docker setup failed: {}", e);
+        std::process::exit(1);
+    }
+
+    // SETUP: Initialize test reporter
+    let mut reporter = match TestReporter::new("tombstone_purge_test_full", git_info) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("✗ Failed to initialize reporter: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // SETUP: Verify CBS configuration
+    reporter.log("SETUP: Verifying CBS metadata purge interval configuration...");
+    get_metadata_purge_interval();
+    reporter.log("");
 
     let mut db = Database::open(
         "tombstone_test_full",
@@ -23,7 +58,7 @@ fn main() {
     // Setup user with access to channel1 only
     add_or_update_user("test_user", vec!["channel1".into()]);
     let session_token = get_session("test_user");
-    println!("Sync gateway session token: {session_token}\n");
+    reporter.log(&format!("Sync gateway session token: {session_token}\n"));
 
     // Setup replicator with auto-purge enabled
     let mut repl =
@@ -33,111 +68,160 @@ fn main() {
     std::thread::sleep(std::time::Duration::from_secs(3));
 
     // STEP 1: Create document in channel1 and replicate
-    println!("STEP 1: Creating doc1 in channel1...");
+    reporter.log("STEP 1: Creating doc1 in channel1...");
     create_doc(&mut db, "doc1", "channel1");
     std::thread::sleep(std::time::Duration::from_secs(5));
 
-    // Verify doc exists locally
     assert!(get_doc(&db, "doc1").is_ok());
-    println!("✓ doc1 created and replicated\n");
+    let state1 = get_sync_xattr("doc1");
+    reporter.checkpoint(
+        "STEP_1_CREATED",
+        state1,
+        vec!["Document created in channel1 and replicated".to_string()],
+    );
+    reporter.log("✓ doc1 created and replicated\n");
 
     // STEP 2: Delete doc1 (creating a tombstone)
-    println!("STEP 2: Deleting doc1 (creating tombstone)...");
+    reporter.log("STEP 2: Deleting doc1 (creating tombstone)...");
     let mut doc1 = get_doc(&db, "doc1").unwrap();
     db.delete_document(&mut doc1).unwrap();
     std::thread::sleep(std::time::Duration::from_secs(5));
-    println!("✓ doc1 deleted locally\n");
+
+    let state2 = get_sync_xattr("doc1");
+    reporter.checkpoint(
+        "STEP_2_DELETED",
+        state2,
+        vec!["Document deleted, tombstone created".to_string()],
+    );
+    reporter.log("✓ doc1 deleted locally\n");
 
     // STEP 3: Purge tombstone from SGW
-    // Note: This step may fail if SGW doesn't have the tombstone (404).
-    // This can happen if:
-    // - The tombstone only exists in CBS, not in SGW's cache
-    // - SGW auto-purged it very quickly
-    // This is not blocking for the test objective (verifying flags=0 on re-create).
-    println!("STEP 3: Purging tombstone from SGW...");
+    reporter.log("STEP 3: Purging tombstone from SGW...");
+    let mut notes3 = vec![];
     if let Some(tombstone_rev) = get_doc_rev("doc1") {
         purge_doc_from_sgw("doc1", &tombstone_rev);
-        println!("✓ Tombstone purged from SGW (rev: {tombstone_rev})\n");
+        notes3.push(format!(
+            "Tombstone purged from SGW (rev: {})",
+            tombstone_rev
+        ));
+        reporter.log(&format!(
+            "✓ Tombstone purged from SGW (rev: {tombstone_rev})\n"
+        ));
     } else {
-        println!("⚠ Could not get tombstone revision from SGW");
-        println!("  This is not blocking - tombstone may not exist in SGW or was auto-purged\n");
+        notes3.push("Could not get tombstone revision from SGW (404)".to_string());
+        notes3.push("Tombstone may not exist in SGW or was auto-purged".to_string());
+        reporter.log("⚠ Could not get tombstone revision from SGW");
+        reporter
+            .log("  This is not blocking - tombstone may not exist in SGW or was auto-purged\n");
     }
+    reporter.checkpoint("STEP_3_SGW_PURGE_ATTEMPTED", None, notes3);
 
-    // STEP 4: Configure CBS metadata purge interval to 1 hour (minimum allowed)
-    println!("STEP 4: Configuring CBS metadata purge interval...");
-    let purge_interval_days = 0.04; // 1 hour (CBS minimum)
-    let wait_minutes = 65;
-    set_metadata_purge_interval(purge_interval_days);
-    println!("✓ CBS purge interval set to {purge_interval_days} days (1 hour - CBS minimum)\n");
+    // STEP 4: CBS metadata purge interval should already be configured at bucket creation
+    reporter.log("STEP 4: CBS metadata purge interval configuration...");
+    reporter.log("  Purge interval was set to 0.04 days (1 hour) at bucket creation.");
+    reporter.log("  This ensures tombstones created now are eligible for purge after 1 hour.\n");
+
+    let state4 = get_sync_xattr("doc1");
+    reporter.checkpoint(
+        "STEP_4_BEFORE_WAIT",
+        state4,
+        vec![
+            "Tombstone state before waiting for purge interval".to_string(),
+            "Purge interval: 0.04 days (1 hour)".to_string(),
+        ],
+    );
 
     // Check doc in CBS before waiting
-    println!("Checking doc1 in CBS before wait...");
+    reporter.log("Checking doc1 in CBS before wait...");
     check_doc_in_cbs("doc1");
-    println!();
+    reporter.log("");
 
     // STEP 5: Wait for purge interval + margin
-    println!("STEP 5: Waiting {wait_minutes} minutes for tombstone to be eligible for purge...");
-    println!("This is the minimum time required by CBS to purge tombstones.");
-    println!("Progress updates every 5 minutes:\n");
+    reporter.log("STEP 5: Waiting 65 minutes for tombstone to be eligible for purge...");
+    reporter.log("This is the minimum time required by CBS to purge tombstones.");
+    reporter.log("Progress updates every 5 minutes:\n");
 
     let start_time = std::time::Instant::now();
-    for minute in 1..=wait_minutes {
-        if minute % 5 == 0 || minute == 1 || minute == wait_minutes {
+    for minute in 1..=65 {
+        if minute % 5 == 0 || minute == 1 || minute == 65 {
             let elapsed = start_time.elapsed().as_secs() / 60;
-            let remaining = wait_minutes - minute;
-            println!(
-                "  [{minute}/{wait_minutes}] {elapsed} minutes elapsed, {remaining} minutes remaining..."
-            );
+            let remaining = 65 - minute;
+            reporter.log(&format!(
+                "  [{minute}/65] {elapsed} minutes elapsed, {remaining} minutes remaining..."
+            ));
         }
         std::thread::sleep(std::time::Duration::from_secs(60));
     }
-    println!("✓ Wait complete (65 minutes elapsed)\n");
+    reporter.log("✓ Wait complete (65 minutes elapsed)\n");
 
     // STEP 6: Compact CBS bucket
-    println!("STEP 6: Compacting CBS bucket...");
+    reporter.log("STEP 6: Compacting CBS bucket...");
     compact_cbs_bucket();
     std::thread::sleep(std::time::Duration::from_secs(5));
-    println!("✓ CBS compaction triggered\n");
+    reporter.log("✓ CBS compaction triggered\n");
 
     // STEP 7: Compact SGW database
-    println!("STEP 7: Compacting SGW database...");
+    reporter.log("STEP 7: Compacting SGW database...");
     compact_sgw_database();
     std::thread::sleep(std::time::Duration::from_secs(5));
-    println!("✓ SGW compaction complete\n");
+    reporter.log("✓ SGW compaction complete\n");
 
     // STEP 8: Check if tombstone still exists in CBS
-    println!("STEP 8: Checking if tombstone exists in CBS...");
+    reporter.log("STEP 8: Checking if tombstone exists in CBS...");
     check_doc_in_cbs("doc1");
-    println!("  If tombstone was purged, the query should return no results.");
-    println!();
+    let state8 = get_sync_xattr("doc1");
+    let notes8 = if state8
+        .as_ref()
+        .and_then(|s| s.get("flags"))
+        .and_then(|f| f.as_i64())
+        == Some(1)
+    {
+        vec!["Tombstone still present after compaction".to_string()]
+    } else if state8.is_none() {
+        vec!["Tombstone successfully purged from CBS".to_string()]
+    } else {
+        vec!["Document is live (unexpected state)".to_string()]
+    };
+    reporter.checkpoint("STEP_8_AFTER_COMPACTION", state8, notes8);
+    reporter.log("  If tombstone was purged, the query should return no results.\n");
 
     // STEP 9: Re-create doc1 and verify it's treated as new
-    println!("STEP 9: Re-creating doc1 with same ID...");
+    reporter.log("STEP 9: Re-creating doc1 with same ID...");
     create_doc(&mut db, "doc1", "channel1");
     std::thread::sleep(std::time::Duration::from_secs(10));
 
+    let state9 = get_sync_xattr("doc1");
+    let notes9 = vec!["Document re-created after tombstone purge test".to_string()];
+    reporter.checkpoint("STEP_9_RECREATED", state9, notes9);
+
     // Verify doc exists locally
     if get_doc(&db, "doc1").is_ok() {
-        println!("✓ doc1 re-created successfully");
-        println!("\n=== CRITICAL CHECK ===");
-        println!("Review the replication logs above:");
-        println!("  - flags=0: Document treated as NEW (tombstone successfully purged) ✓");
-        println!("  - flags=1: Document recognized as deleted (tombstone still exists) ✗");
-        println!("======================\n");
+        reporter.log("✓ doc1 re-created successfully");
+        reporter.log("\n=== CRITICAL CHECK ===");
+        reporter.log("Review the replication logs above:");
+        reporter.log("  - flags=0: Document treated as NEW (tombstone successfully purged) ✓");
+        reporter.log("  - flags=1: Document recognized as deleted (tombstone still exists) ✗");
+        reporter.log("======================\n");
     } else {
-        println!("✗ doc1 could not be re-created\n");
+        reporter.log("✗ doc1 could not be re-created\n");
     }
 
     // Check final state in CBS
-    println!("Final CBS state:");
+    reporter.log("Final CBS state:");
     check_doc_in_cbs("doc1");
 
     repl.stop(None);
-    println!("\n=== Test complete ===");
-    println!(
+
+    reporter.log("\n=== Test complete ===");
+    reporter.log(&format!(
         "Total runtime: ~{} minutes",
         start_time.elapsed().as_secs() / 60
-    );
+    ));
+
+    // Generate report
+    if let Err(e) = reporter.finalize() {
+        eprintln!("⚠ Failed to generate report: {}", e);
+    }
 }
 
 #[allow(deprecated)]
