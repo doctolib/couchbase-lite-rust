@@ -150,3 +150,69 @@ pub fn compact_sgw_database() {
         Err(e) => println!("Compact SGW database error: {e}"),
     }
 }
+
+pub fn delete_doc_from_central(doc_id: &str) -> bool {
+    if let Some(rev) = get_doc_rev(doc_id) {
+        let url = format!("{SYNC_GW_URL_ADMIN}/{doc_id}?rev={rev}");
+        let response = reqwest::blocking::Client::new().delete(&url).send();
+
+        match response {
+            Ok(resp) => {
+                let status = resp.status();
+                if status.is_success() {
+                    println!("✓ Deleted {doc_id} from central (rev: {rev})");
+                    return true;
+                } else {
+                    println!("✗ Failed to delete {doc_id} from central: status={status}");
+                    return false;
+                }
+            }
+            Err(e) => {
+                println!("✗ Error deleting {doc_id} from central: {e}");
+                return false;
+            }
+        }
+    } else {
+        println!("✗ Could not get revision for {doc_id} to delete from central");
+        false
+    }
+}
+
+pub fn check_doc_exists_in_central(doc_id: &str) -> bool {
+    let url = format!("{SYNC_GW_URL_ADMIN}/{doc_id}");
+    let result = reqwest::blocking::Client::new().get(&url).send();
+
+    match result {
+        Ok(response) => {
+            let status = response.status();
+            if status.is_success() {
+                if let Ok(json) = response.json::<serde_json::Value>() {
+                    let is_deleted = json
+                        .get("_deleted")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    if is_deleted {
+                        println!("  Document {doc_id} exists in central as DELETED/TOMBSTONE");
+                        false
+                    } else {
+                        println!("  ✓ Document {doc_id} exists in central as LIVE");
+                        true
+                    }
+                } else {
+                    println!("  Document {doc_id}: status={status}, could not parse JSON");
+                    false
+                }
+            } else if status.as_u16() == 404 {
+                println!("  ✓ Document {doc_id} NOT found in central (purged or never existed)");
+                false
+            } else {
+                println!("  Document {doc_id}: unexpected status={status}");
+                false
+            }
+        }
+        Err(e) => {
+            println!("  Error checking {doc_id} in central: {e}");
+            false
+        }
+    }
+}
