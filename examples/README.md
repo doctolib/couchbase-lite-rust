@@ -137,6 +137,48 @@ $ cargo run --features=enterprise --example tombstone_purge_test
 
 **Report location**: `test_results/test_run_<timestamp>_<commit_sha>/`
 
+#### `tombstone_resurrection_test`
+Complete test for BC-994 scenario: validates soft_delete behavior when documents resurrect after central tombstone expiry.
+
+**Runtime: ~75-80 minutes** (+ ~5 minutes for Docker rebuild)
+**Features**: Automatic Docker management, structured reporting, BC-994 logic validation
+
+```shell
+$ cargo run --features=enterprise --example tombstone_resurrection_test
+```
+
+**What it tests:**
+- ✅ Document deletion in central only (remains in cblite)
+- ✅ Central tombstone purge after 1 hour
+- ✅ Document resurrection via replication reset checkpoint
+- ✅ Sync function soft_delete routing (updatedAt > 1h → soft_deleted channel)
+- ✅ Auto-purge from cblite (document removed from accessible channels)
+- ✅ TTL-based purge from central (5 minutes for testing)
+
+**Test scenario:**
+1. Create doc with updatedAt=NOW, replicate to central, STOP replication
+2. Delete doc from central only (cblite keeps it)
+3. Wait 65 minutes for tombstone purge + compact
+4. Verify central tombstone purged
+5. Restart replication with reset checkpoint → doc resurrects
+6. Verify sync function routes to "soft_deleted" channel
+7. Verify auto-purge removes doc from cblite
+8. Wait 6 minutes for TTL expiry + compact
+9. Verify doc purged from central
+
+**Report location**: `test_results/test_run_<timestamp>_<commit_sha>/`
+
+**Sync function logic tested** (from billeo-engine PR #7672):
+```javascript
+if (!oldDoc && doc.updatedAt) {
+    if (updatedAt < now - 1hour) {  // Adapted for testing
+        channel("soft_deleted");
+        expiry(5 * 60);  // 5 minutes for testing
+        return;
+    }
+}
+```
+
 ### Utility functions
 
 There are utility functions available in `examples/utils/` to interact with the Sync Gateway and Couchbase Server:
