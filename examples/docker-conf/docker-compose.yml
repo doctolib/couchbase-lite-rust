@@ -7,6 +7,8 @@ services:
       - "11210:11210" # memcached port
     build:
       context: ${PWD}/couchbase-server-dev
+    environment:
+      - TZ=${TZ:-UTC}
     deploy:
       resources:
         limits:
@@ -17,6 +19,8 @@ services:
     ports:
       - "4984:4984"
       - "4985:4985"
+    environment:
+      - TZ=${TZ:-UTC}
     deploy:
       resources:
         limits:

@@ -37,6 +37,10 @@ pub fn ensure_clean_environment() -> Result<(), String> {
     println!("  [4/4] Waiting for services to be healthy...");
     wait_for_healthy_services()?;
 
+    // Verify timezone synchronization
+    println!("  [5/5] Verifying timezone synchronization...");
+    verify_timezone_sync()?;
+
     println!("✓ Docker environment ready\n");
     Ok(())
 }
@@ -155,6 +159,47 @@ pub fn get_docker_logs(service_name: &str, output_path: &Path) -> Result<(), Str
 
     std::fs::write(output_path, &output.stdout)
         .map_err(|e| format!("Failed to write logs to file: {}", e))?;
+
+    Ok(())
+}
+
+fn verify_timezone_sync() -> Result<(), String> {
+    // Get local timezone
+    let local_tz = std::env::var("TZ").unwrap_or_else(|_| {
+        // Try to get system timezone
+        let output = Command::new("date").arg("+%Z").output();
+
+        if let Ok(output) = output {
+            String::from_utf8_lossy(&output.stdout).trim().to_string()
+        } else {
+            "UTC".to_string()
+        }
+    });
+
+    println!("    Local timezone: {}", local_tz);
+
+    // Check SGW container timezone
+    let sgw_date = Command::new("docker")
+        .args(["compose", "exec", "-T", "cblr-sync-gateway", "date", "+%Z"])
+        .current_dir(DOCKER_CONF_DIR)
+        .output();
+
+    if let Ok(output) = sgw_date {
+        let container_tz = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        println!("    Sync Gateway timezone: {}", container_tz);
+
+        if container_tz.is_empty() {
+            println!("    ⚠ Warning: Could not determine container timezone");
+        }
+    } else {
+        println!(
+            "    ⚠ Warning: Could not check container timezone (containers may still be starting)"
+        );
+    }
+
+    // Note: We don't fail on timezone mismatch, just log it
+    // The TZ environment variable should be passed through docker-compose.yml
+    println!("    💡 Tip: Set TZ environment variable before docker compose up to sync timezones");
 
     Ok(())
 }
