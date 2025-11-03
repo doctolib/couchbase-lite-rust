@@ -47,10 +47,20 @@ fn main() {
     get_metadata_purge_interval();
     reporter.log("");
 
+    // SETUP: Clean up local database from previous run
+    let db_name = "tombstone_resurrection_test";
+    let db_path = Path::new("./");
+
+    if Database::exists(db_name, db_path) {
+        reporter.log("SETUP: Deleting local database from previous run...");
+        Database::delete_file(db_name, db_path).expect("Failed to delete existing database");
+        reporter.log("✓ Local database cleaned\n");
+    }
+
     let mut db_cblite = Database::open(
-        "tombstone_resurrection_test",
+        db_name,
         Some(DatabaseConfiguration {
-            directory: Path::new("./"),
+            directory: db_path,
             #[cfg(feature = "enterprise")]
             encryption_key: None,
         }),
