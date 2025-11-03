@@ -2,6 +2,7 @@ mod utils;
 
 use couchbase_lite::*;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use utils::*;
 
 #[allow(deprecated)]
@@ -72,9 +73,20 @@ fn main() {
     let session_token = get_session("test_user");
     reporter.log(&format!("Sync gateway session token: {session_token}\n"));
 
+    // Track replication events
+    let repl_events = Arc::new(Mutex::new(Vec::<String>::new()));
+    let repl_events_clone = repl_events.clone();
+
     // Setup replicator with auto-purge ENABLED
     let mut repl = setup_replicator(db_cblite.clone(), session_token.clone())
-        .add_document_listener(Box::new(doc_listener));
+        .add_document_listener(Box::new(move |dir, docs| {
+            let mut events = repl_events_clone.lock().unwrap();
+            for doc in docs {
+                let event = format!("{:?}: {} (flags={})", dir, doc.id, doc.flags);
+                println!("  📡 {}", event);
+                events.push(event);
+            }
+        }));
 
     repl.start(false);
     std::thread::sleep(std::time::Duration::from_secs(3));
@@ -106,24 +118,24 @@ fn main() {
     reporter.log("✓ doc1 created and replicated to central\n");
 
     // STOP replication
-    reporter.log("Stopping replication...");
+    reporter.log("STEP 1b: Stopping replication...");
     repl.stop(None);
     std::thread::sleep(std::time::Duration::from_secs(2));
     reporter.log("✓ Replication stopped\n");
 
     // STEP 2: Delete doc1 from CENTRAL only (doc remains in cblite)
-    reporter.log("STEP 2: Deleting doc1 from CENTRAL only (simulating central deletion)...");
+    reporter.log("STEP 2: Deleting doc1 from CENTRAL only...");
     let deletion_success = delete_doc_from_central("doc1");
 
     if !deletion_success {
-        reporter.log("⚠ Failed to delete document from central - test may not be valid");
+        reporter.log("⚠ Failed to delete document from central - test may not be valid\n");
     } else {
         std::thread::sleep(std::time::Duration::from_secs(3));
         reporter.log("✓ doc1 deleted from central (tombstone created in central)\n");
     }
 
     // Verify doc still exists in cblite
-    reporter.log("Verifying doc1 still exists in local cblite...");
+    reporter.log("STEP 2b: Verifying doc1 still exists in local cblite...");
     if get_doc(&db_cblite, "doc1").is_ok() {
         reporter.log("✓ doc1 still present in cblite (as expected)\n");
     } else {
@@ -140,10 +152,10 @@ fn main() {
         ],
     );
 
-    // STEP 3-7: Wait for purge interval + compact
+    // STEP 3: Wait for purge interval + compact
     reporter.log("STEP 3: Waiting 65 minutes for central tombstone to be eligible for purge...");
-    reporter.log("This allows the document's updatedAt to become > 1 hour old.");
-    reporter.log("Progress updates every 5 minutes:\n");
+    reporter.log("  This allows the document's updatedAt to become > 1 hour old.");
+    reporter.log("  Progress updates every 5 minutes:\n");
 
     let start_time = std::time::Instant::now();
     for minute in 1..=65 {
@@ -162,22 +174,35 @@ fn main() {
     }
     reporter.log("✓ Wait complete (65 minutes elapsed)\n");
 
-    // Compact CBS and SGW
+    // STEP 4: Compact CBS
     reporter.log("STEP 4: Compacting CBS bucket...");
     compact_cbs_bucket();
     std::thread::sleep(std::time::Duration::from_secs(5));
     reporter.log("✓ CBS compaction triggered\n");
 
+    // STEP 5: Compact SGW
     reporter.log("STEP 5: Compacting SGW database...");
     compact_sgw_database();
     std::thread::sleep(std::time::Duration::from_secs(5));
     reporter.log("✓ SGW compaction complete\n");
 
-    // STEP 8: Verify tombstone purged from central
+    // STEP 6: Verify tombstone purged from central
     reporter.log("STEP 6: Checking if central tombstone was purged...");
-    check_doc_in_cbs("doc1");
     let state6 = get_sync_xattr("doc1");
     let purged = state6.is_none() || state6.as_ref().and_then(|s| s.get("flags")).is_none();
+
+    if purged {
+        reporter.log("  ✓ Central tombstone successfully purged (xattr absent)\n");
+    } else {
+        if let Some(ref xattr) = state6 {
+            let flags = xattr.get("flags").and_then(|f| f.as_i64()).unwrap_or(0);
+            reporter.log(&format!(
+                "  ⚠ Central tombstone still present (flags: {})\n",
+                flags
+            ));
+        }
+    }
+
     reporter.checkpoint(
         "STEP_6_TOMBSTONE_CHECK",
         state6,
@@ -187,10 +212,22 @@ fn main() {
             vec!["Central tombstone still present (unexpected)".to_string()]
         },
     );
-    reporter.log("");
 
-    // STEP 9: Restart replication with RESET CHECKPOINT
-    reporter.log("STEP 7: Restarting replication with RESET CHECKPOINT...");
+    // STEP 7: Prepare for replication reset - Touch document to force push
+    reporter.log("STEP 7: Preparing document for replication reset...");
+    reporter.log("  Touching doc1 to ensure it will be pushed during reset checkpoint...");
+
+    // Modify document slightly to trigger a change
+    {
+        let mut doc = get_doc(&db_cblite, "doc1").unwrap();
+        let mut props = doc.mutable_properties();
+        props.at("_resurrection_test").put_bool(true);
+        db_cblite.save_document(&mut doc).unwrap();
+        reporter.log("  ✓ Document modified to trigger replication\n");
+    }
+
+    // STEP 8: Restart replication with RESET CHECKPOINT
+    reporter.log("STEP 8: Restarting replication with RESET CHECKPOINT...");
     reporter.log("  This simulates a fresh sync where cblite will push doc1 back to central.");
     reporter.log(&format!(
         "  doc1's updatedAt ({}) is now > 1 hour old",
@@ -198,17 +235,52 @@ fn main() {
     ));
     reporter.log("  Sync function should route it to 'soft_deleted' channel.\n");
 
+    // Clear previous replication events
+    {
+        let mut events = repl_events.lock().unwrap();
+        events.clear();
+    }
+
     // Recreate replicator with reset flag
-    let mut repl_reset = setup_replicator(db_cblite.clone(), session_token)
-        .add_document_listener(Box::new(doc_listener));
+    let repl_events_clone2 = repl_events.clone();
+    let mut repl_reset = setup_replicator(db_cblite.clone(), session_token).add_document_listener(
+        Box::new(move |dir, docs| {
+            let mut events = repl_events_clone2.lock().unwrap();
+            for doc in docs {
+                let event = format!("{:?}: {} (flags={})", dir, doc.id, doc.flags);
+                println!("  📡 {}", event);
+                events.push(event);
+            }
+        }),
+    );
 
     repl_reset.start(true); // true = reset checkpoint
-    std::thread::sleep(std::time::Duration::from_secs(10));
 
+    // Wait longer for replication to complete
+    reporter.log("  Waiting 30 seconds for replication to process...");
+    std::thread::sleep(std::time::Duration::from_secs(30));
     reporter.log("✓ Replication restarted with reset checkpoint\n");
 
-    // STEP 10: Verify auto-purge in cblite (non-blocking)
-    reporter.log("STEP 8: Checking if doc1 was auto-purged from cblite...");
+    // Log replication events
+    {
+        let events = repl_events.lock().unwrap();
+        if !events.is_empty() {
+            reporter.log(&format!(
+                "  Replication events captured: {} events",
+                events.len()
+            ));
+            for event in events.iter() {
+                reporter.log(&format!("    - {}", event));
+            }
+            reporter.log("");
+        } else {
+            reporter
+                .log("  ⚠ No replication events captured (document may not have been pushed)\n");
+        }
+    }
+
+    // STEP 9: Verify auto-purge in cblite (non-blocking)
+    reporter.log("STEP 9: Checking if doc1 was auto-purged from cblite...");
     reporter.log("  doc1 should be auto-purged because it was routed to 'soft_deleted' channel");
     reporter.log("  (user only has access to 'channel1')\n");
 
@@ -216,17 +288,27 @@ fn main() {
 
     match get_doc(&db_cblite, "doc1") {
         Ok(_) => {
-            reporter.log("⚠ doc1 STILL IN cblite (auto-purge may not have triggered yet)");
+            reporter.log("  ⚠ doc1 STILL IN cblite (auto-purge may not have triggered yet)");
             reporter.log("  This is not blocking - continuing test...\n");
         }
         Err(_) => {
-            reporter.log("✓ doc1 AUTO-PURGED from cblite (as expected)\n");
+            reporter.log("  ✓ doc1 AUTO-PURGED from cblite (as expected)\n");
         }
     }
 
-    // Check if doc exists in central with soft_deleted routing
-    reporter.log("STEP 9: Checking if doc1 exists in central...");
+    // STEP 10: Check if doc exists in central with soft_deleted routing
+    reporter.log("STEP 10: Checking if doc1 exists in central...");
+    reporter.log("  Querying SGW admin API...");
     let doc_in_central = check_doc_exists_in_central("doc1");
+
+    if doc_in_central {
+        reporter.log("  ✓ Document found in central (resurrection successful)");
+    } else {
+        reporter.log("  ⚠ Document NOT found in central");
+        reporter.log("  This means the document was not pushed during replication reset");
+        reporter.log("  This is unexpected but continuing test...");
+    }
+    reporter.log("");
 
     let state9 = get_sync_xattr("doc1");
     let notes9 = if doc_in_central {
@@ -236,62 +318,69 @@ fn main() {
             "TTL set to 5 minutes".to_string(),
         ]
     } else {
-        vec!["Document NOT found in central (unexpected at this stage)".to_string()]
+        vec![
+            "Document NOT found in central (unexpected at this stage)".to_string(),
+            "Document may not have been pushed during replication reset".to_string(),
+        ]
     };
     reporter.checkpoint("STEP_9_AFTER_RESURRECTION", state9.clone(), notes9);
 
-    // Check channel routing in xattr
+    // STEP 9b: Check channel routing in xattr
     if let Some(ref xattr) = state9 {
         if let Some(channels) = xattr.get("channels").and_then(|c| c.as_object()) {
-            reporter.log("\n  Channel routing:");
+            reporter.log("  Channel routing in CBS:");
             for (channel_name, _) in channels {
                 reporter.log(&format!("    - {}", channel_name));
             }
 
             if channels.contains_key("soft_deleted") {
-                reporter.log("\n  ✓ Document correctly routed to 'soft_deleted' channel");
+                reporter.log("  ✓ Document correctly routed to 'soft_deleted' channel\n");
             } else {
-                reporter.log("\n  ⚠ Document NOT in 'soft_deleted' channel (unexpected)");
+                reporter.log("  ⚠ Document NOT in 'soft_deleted' channel (unexpected)\n");
             }
         }
+    } else if doc_in_central {
+        reporter.log("  ⚠ Could not retrieve _sync xattr to verify channel routing\n");
     }
-    reporter.log("");
 
-    // STEP 11-12: Wait for TTL expiry (5 minutes) + compact
-    reporter.log("STEP 10: Waiting 6 minutes for TTL expiry (5 min TTL + margin)...");
+    // STEP 11: Wait for TTL expiry (5 minutes) + compact
+    reporter.log("STEP 11: Waiting 6 minutes for TTL expiry (5 min TTL + margin)...");
     for minute in 1..=6 {
         reporter.log(&format!("  [{minute}/6] Waiting..."));
         std::thread::sleep(std::time::Duration::from_secs(60));
     }
     reporter.log("✓ Wait complete\n");
 
-    reporter.log("STEP 11: Compacting CBS bucket (to trigger TTL purge)...");
+    // STEP 12: Compact CBS
+    reporter.log("STEP 12: Compacting CBS bucket (to trigger TTL purge)...");
     compact_cbs_bucket();
     std::thread::sleep(std::time::Duration::from_secs(5));
     reporter.log("✓ CBS compaction triggered\n");
 
-    reporter.log("STEP 12: Compacting SGW database...");
+    // STEP 13: Compact SGW
+    reporter.log("STEP 13: Compacting SGW database...");
     compact_sgw_database();
     std::thread::sleep(std::time::Duration::from_secs(5));
     reporter.log("✓ SGW compaction complete\n");
 
-    // STEP 13: Verify doc purged from central (TTL expired)
-    reporter.log("STEP 13: Checking if doc1 was purged from central (TTL expired)...");
+    // STEP 14: Verify doc purged from central (TTL expired)
+    reporter.log("STEP 14: Checking if doc1 was purged from central (TTL expired)...");
+    reporter.log("  Querying SGW admin API...");
     let still_in_central = check_doc_exists_in_central("doc1");
 
-    let state13 = get_sync_xattr("doc1");
-    let notes13 = if still_in_central {
+    if !still_in_central {
+        reporter.log("  ✓ doc1 PURGED from central (TTL expiry successful)\n");
+    } else {
+        reporter.log("  ⚠ doc1 STILL in central (TTL purge may need more time)\n");
+    }
+
+    let state14 = get_sync_xattr("doc1");
+    let notes14 = if still_in_central {
         vec!["Document STILL in central (TTL may not have expired yet)".to_string()]
     } else {
         vec!["Document successfully purged from central after TTL expiry".to_string()]
     };
-    reporter.checkpoint("STEP_13_AFTER_TTL_PURGE", state13, notes13);
-
-    if !still_in_central {
-        reporter.log("✓ doc1 PURGED from central (TTL expiry successful)\n");
-    } else {
-        reporter.log("⚠ doc1 STILL in central (TTL purge may need more time)\n");
-    }
+    reporter.checkpoint("STEP_14_AFTER_TTL_PURGE", state14, notes14);
 
     repl_reset.stop(None);
 
@@ -300,6 +389,12 @@ fn main() {
         "Total runtime: ~{} minutes",
         start_time.elapsed().as_secs() / 60
     ));
+
+    // Log final replication events summary
+    {
+        let events = repl_events.lock().unwrap();
+        reporter.log(&format!("\nTotal replication events: {}", events.len()));
+    }
 
     reporter.log("\n=== SUMMARY ===");
     reporter.log("✓ Document resurrection scenario tested");
@@ -331,11 +426,6 @@ fn create_doc_with_updated_at(
     )
     .unwrap();
     db_cblite.save_document(&mut doc).unwrap();
-
-    println!(
-        "  Created doc {id} with updatedAt: {}",
-        updated_at.to_rfc3339()
-    );
 }
 
 #[allow(deprecated)]
@@ -372,20 +462,4 @@ fn setup_replicator(db_cblite: Database, session_token: String) -> Replicator {
     };
     let repl_context = ReplicationConfigurationContext::default();
     Replicator::new(repl_conf, Box::new(repl_context)).unwrap()
-}
-
-fn doc_listener(direction: Direction, documents: Vec<ReplicatedDocument>) {
-    println!("=== Document(s) replicated ===");
-    println!("Direction: {direction:?}");
-    for document in documents {
-        println!("Document: {document:?}");
-        if document.flags == 1 {
-            println!("  ⚠ flags=1 - Document recognized as deleted/tombstone");
-        } else if document.flags == 0 {
-            println!("  ✓ flags=0 - Document treated as new");
-        } else if document.flags == 2 {
-            println!("  🗑️ flags=2 - Document auto-purged (AccessRemoved)");
-        }
-    }
-    println!("===\n");
 }
