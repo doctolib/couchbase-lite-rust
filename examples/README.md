@@ -158,13 +158,17 @@ $ cargo run --features=enterprise --example tombstone_resurrection_test
 **Test scenario:**
 1. Create doc with updatedAt=NOW, replicate to central, STOP replication
 2. Delete doc from central only (cblite keeps it)
-3. Wait 65 minutes for tombstone purge + compact
+3. Wait 65 minutes for tombstone purge + compact CBS + SGW
 4. Verify central tombstone purged
-5. Restart replication with reset checkpoint → doc resurrects
+5. Restart replication with reset checkpoint → doc resurrects (NO modification to doc)
 6. Verify sync function routes to "soft_deleted" channel
 7. Verify auto-purge removes doc from cblite
 8. Wait 6 minutes for TTL expiry + compact
 9. Verify doc purged from central
+
+**Note**: The document is NOT modified before resurrection. The reset checkpoint
+alone should cause cblite to re-push the document to central where it will be
+detected as a resurrection by the sync function (no oldDoc + updatedAt > 1h).
 
 **Report location**: `test_results/test_run_<timestamp>_<commit_sha>/`
 

@@ -213,21 +213,8 @@ fn main() {
         },
     );
 
-    // STEP 7: Prepare for replication reset - Touch document to force push
-    reporter.log("STEP 7: Preparing document for replication reset...");
-    reporter.log("  Touching doc1 to ensure it will be pushed during reset checkpoint...");
-
-    // Modify document slightly to trigger a change
-    {
-        let mut doc = get_doc(&db_cblite, "doc1").unwrap();
-        let mut props = doc.mutable_properties();
-        props.at("_resurrection_test").put_bool(true);
-        db_cblite.save_document(&mut doc).unwrap();
-        reporter.log("  ✓ Document modified to trigger replication\n");
-    }
-
-    // STEP 8: Restart replication with RESET CHECKPOINT
-    reporter.log("STEP 8: Restarting replication with RESET CHECKPOINT...");
+    // STEP 7: Restart replication with RESET CHECKPOINT
+    reporter.log("STEP 7: Restarting replication with RESET CHECKPOINT...");
     reporter.log("  This simulates a fresh sync where cblite will push doc1 back to central.");
     reporter.log(&format!(
         "  doc1's updatedAt ({}) is now > 1 hour old",
@@ -279,8 +266,8 @@ fn main() {
         }
     }
 
-    // STEP 9: Verify auto-purge in cblite (non-blocking)
-    reporter.log("STEP 9: Checking if doc1 was auto-purged from cblite...");
+    // STEP 8: Verify auto-purge in cblite (non-blocking)
+    reporter.log("STEP 8: Checking if doc1 was auto-purged from cblite...");
     reporter.log("  doc1 should be auto-purged because it was routed to 'soft_deleted' channel");
     reporter.log("  (user only has access to 'channel1')\n");
 
@@ -296,8 +283,8 @@ fn main() {
         }
     }
 
-    // STEP 10: Check if doc exists in central with soft_deleted routing
-    reporter.log("STEP 10: Checking if doc1 exists in central...");
+    // STEP 9: Check if doc exists in central with soft_deleted routing
+    reporter.log("STEP 9: Checking if doc1 exists in central...");
     reporter.log("  Querying SGW admin API...");
     let doc_in_central = check_doc_exists_in_central("doc1");
 
@@ -343,28 +330,28 @@ fn main() {
         reporter.log("  ⚠ Could not retrieve _sync xattr to verify channel routing\n");
     }
 
-    // STEP 11: Wait for TTL expiry (5 minutes) + compact
-    reporter.log("STEP 11: Waiting 6 minutes for TTL expiry (5 min TTL + margin)...");
+    // STEP 10: Wait for TTL expiry (5 minutes) + compact
+    reporter.log("STEP 10: Waiting 6 minutes for TTL expiry (5 min TTL + margin)...");
     for minute in 1..=6 {
         reporter.log(&format!("  [{minute}/6] Waiting..."));
         std::thread::sleep(std::time::Duration::from_secs(60));
     }
     reporter.log("✓ Wait complete\n");
 
-    // STEP 12: Compact CBS
-    reporter.log("STEP 12: Compacting CBS bucket (to trigger TTL purge)...");
+    // STEP 11: Compact CBS
+    reporter.log("STEP 11: Compacting CBS bucket (to trigger TTL purge)...");
     compact_cbs_bucket();
     std::thread::sleep(std::time::Duration::from_secs(5));
     reporter.log("✓ CBS compaction triggered\n");
 
-    // STEP 13: Compact SGW
-    reporter.log("STEP 13: Compacting SGW database...");
+    // STEP 12: Compact SGW
+    reporter.log("STEP 12: Compacting SGW database...");
     compact_sgw_database();
     std::thread::sleep(std::time::Duration::from_secs(5));
     reporter.log("✓ SGW compaction complete\n");
 
-    // STEP 14: Verify doc purged from central (TTL expired)
-    reporter.log("STEP 14: Checking if doc1 was purged from central (TTL expired)...");
+    // STEP 13: Verify doc purged from central (TTL expired)
+    reporter.log("STEP 13: Checking if doc1 was purged from central (TTL expired)...");
     reporter.log("  Querying SGW admin API...");
     let still_in_central = check_doc_exists_in_central("doc1");
 
@@ -374,13 +361,13 @@ fn main() {
         reporter.log("  ⚠ doc1 STILL in central (TTL purge may need more time)\n");
     }
 
-    let state14 = get_sync_xattr("doc1");
-    let notes14 = if still_in_central {
+    let state13 = get_sync_xattr("doc1");
+    let notes13 = if still_in_central {
         vec!["Document STILL in central (TTL may not have expired yet)".to_string()]
     } else {
         vec!["Document successfully purged from central after TTL expiry".to_string()]
     };
-    reporter.checkpoint("STEP_14_AFTER_TTL_PURGE", state14, notes14);
+    reporter.checkpoint("STEP_13_AFTER_TTL_PURGE", state13, notes13);
 
     repl_reset.stop(None);
 
