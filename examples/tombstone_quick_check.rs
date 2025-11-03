@@ -9,7 +9,7 @@ fn main() {
     println!("=== Tombstone Quick Check (30 seconds) ===");
     println!("This is a rapid validation test for tombstone detection via XATTRs.\n");
 
-    let mut db = Database::open(
+    let mut db_cblite = Database::open(
         "tombstone_quick_check",
         Some(DatabaseConfiguration {
             directory: Path::new("./"),
@@ -25,8 +25,8 @@ fn main() {
     println!("Session token: {session_token}\n");
 
     // Setup replicator with auto-purge enabled
-    let mut repl =
-        setup_replicator(db.clone(), session_token).add_document_listener(Box::new(doc_listener));
+    let mut repl = setup_replicator(db_cblite.clone(), session_token)
+        .add_document_listener(Box::new(doc_listener));
 
     repl.start(false);
     std::thread::sleep(std::time::Duration::from_secs(3));
@@ -35,7 +35,7 @@ fn main() {
     println!("TEST 1: Create document and check CBS state");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
-    create_doc(&mut db, "quick_doc", "channel1");
+    create_doc(&mut db_cblite, "quick_doc", "channel1");
     std::thread::sleep(std::time::Duration::from_secs(3));
 
     println!("\n📊 CBS State after creation:");
@@ -46,8 +46,8 @@ fn main() {
     println!("TEST 2: Delete document and check CBS state");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
-    let mut doc = db.get_document("quick_doc").unwrap();
-    db.delete_document(&mut doc).unwrap();
+    let mut doc = db_cblite.get_document("quick_doc").unwrap();
+    db_cblite.delete_document(&mut doc).unwrap();
     println!("Document deleted locally");
     std::thread::sleep(std::time::Duration::from_secs(3));
 
@@ -59,7 +59,7 @@ fn main() {
     println!("TEST 3: Re-create document and check CBS state");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
-    create_doc(&mut db, "quick_doc", "channel1");
+    create_doc(&mut db_cblite, "quick_doc", "channel1");
     std::thread::sleep(std::time::Duration::from_secs(3));
 
     println!("\n📊 CBS State after re-creation:");
@@ -80,7 +80,7 @@ fn main() {
 }
 
 #[allow(deprecated)]
-fn create_doc(db: &mut Database, id: &str, channel: &str) {
+fn create_doc(db_cblite: &mut Database, id: &str, channel: &str) {
     let mut doc = Document::new_with_id(id);
     doc.set_properties_as_json(
         &serde_json::json!({
@@ -94,13 +94,13 @@ fn create_doc(db: &mut Database, id: &str, channel: &str) {
         .to_string(),
     )
     .unwrap();
-    db.save_document(&mut doc).unwrap();
+    db_cblite.save_document(&mut doc).unwrap();
     println!("  Created doc {id}");
 }
 
-fn setup_replicator(db: Database, session_token: String) -> Replicator {
+fn setup_replicator(db_cblite: Database, session_token: String) -> Replicator {
     let repl_conf = ReplicatorConfiguration {
-        database: Some(db.clone()),
+        database: Some(db_cblite.clone()),
         endpoint: Endpoint::new_with_url(SYNC_GW_URL).unwrap(),
         replicator_type: ReplicatorType::PushAndPull,
         continuous: true,

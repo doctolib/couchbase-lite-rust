@@ -5,7 +5,7 @@ use couchbase_lite::*;
 use utils::*;
 
 fn main() {
-    let mut db = Database::open(
+    let mut db_cblite = Database::open(
         "test1",
         Some(DatabaseConfiguration {
             directory: Path::new("./"),
@@ -19,8 +19,8 @@ fn main() {
     let session_token = get_session("great_name");
     println!("Sync gateway session token: {session_token}");
 
-    let mut repl =
-        setup_replicator(db.clone(), session_token).add_document_listener(Box::new(doc_listener));
+    let mut repl = setup_replicator(db_cblite.clone(), session_token)
+        .add_document_listener(Box::new(doc_listener));
 
     repl.start(false);
 
@@ -28,22 +28,22 @@ fn main() {
 
     // Auto-purge test scenario from support ticket https://support.couchbase.com/hc/en-us/requests/70596?page=1
     // Testing if documents pushed to inaccessible channels get auto-purged
-    create_doc(&mut db, "doc1", "channel1");
-    create_doc(&mut db, "doc2", "channel2");
+    create_doc(&mut db_cblite, "doc1", "channel1");
+    create_doc(&mut db_cblite, "doc2", "channel2");
 
     std::thread::sleep(std::time::Duration::from_secs(10));
-    assert!(get_doc(&db, "doc1").is_ok());
-    assert!(get_doc(&db, "doc2").is_ok()); // This looks buggy
+    assert!(get_doc(&db_cblite, "doc1").is_ok());
+    assert!(get_doc(&db_cblite, "doc2").is_ok()); // This looks buggy
 
-    change_channel(&mut db, "doc1", "channel2");
+    change_channel(&mut db_cblite, "doc1", "channel2");
 
     std::thread::sleep(std::time::Duration::from_secs(10));
-    assert!(get_doc(&db, "doc1").is_err());
+    assert!(get_doc(&db_cblite, "doc1").is_err());
 
     repl.stop(None);
 }
 
-fn create_doc(db: &mut Database, id: &str, channel: &str) {
+fn create_doc(db_cblite: &mut Database, id: &str, channel: &str) {
     let mut doc = Document::new_with_id(id);
     doc.set_properties_as_json(
         &serde_json::json!({
@@ -52,7 +52,7 @@ fn create_doc(db: &mut Database, id: &str, channel: &str) {
         .to_string(),
     )
     .unwrap();
-    db.save_document(&mut doc).unwrap();
+    db_cblite.save_document(&mut doc).unwrap();
 
     println!(
         "Created doc {id} with content: {}",
@@ -60,24 +60,24 @@ fn create_doc(db: &mut Database, id: &str, channel: &str) {
     );
 }
 
-fn get_doc(db: &Database, id: &str) -> Result<Document> {
-    db.get_document(id)
+fn get_doc(db_cblite: &Database, id: &str) -> Result<Document> {
+    db_cblite.get_document(id)
 }
 
-fn change_channel(db: &mut Database, id: &str, channel: &str) {
-    let mut doc = get_doc(db, id).unwrap();
+fn change_channel(db_cblite: &mut Database, id: &str, channel: &str) {
+    let mut doc = get_doc(db_cblite, id).unwrap();
     let mut prop = doc.mutable_properties();
     prop.at("channels").put_string(channel);
-    let _ = db.save_document(&mut doc);
+    let _ = db_cblite.save_document(&mut doc);
     println!(
         "Changed doc {id} with content: {}",
         doc.properties_as_json()
     );
 }
 
-fn setup_replicator(db: Database, session_token: String) -> Replicator {
+fn setup_replicator(db_cblite: Database, session_token: String) -> Replicator {
     let repl_conf = ReplicatorConfiguration {
-        database: Some(db.clone()),
+        database: Some(db_cblite.clone()),
         endpoint: Endpoint::new_with_url(SYNC_GW_URL).unwrap(),
         replicator_type: ReplicatorType::PushAndPull,
         continuous: true,

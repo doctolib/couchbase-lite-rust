@@ -43,7 +43,7 @@ fn main() {
     // STEP 3: Run actual test
     reporter.log("=== Starting test ===");
 
-    let mut db = Database::open(
+    let mut db_cblite = Database::open(
         "test_reporting",
         Some(DatabaseConfiguration {
             directory: Path::new("./"),
@@ -56,20 +56,20 @@ fn main() {
     add_or_update_user("report_test_user", vec!["channel1".into()]);
     let session_token = get_session("report_test_user");
 
-    let mut repl = setup_replicator(db.clone(), session_token).add_document_listener(Box::new(
-        |_dir, docs| {
+    let mut repl = setup_replicator(db_cblite.clone(), session_token).add_document_listener(
+        Box::new(|_dir, docs| {
             for doc in docs {
                 println!("  📡 Replicated: {} (flags={})", doc.id, doc.flags);
             }
-        },
-    ));
+        }),
+    );
 
     repl.start(false);
     std::thread::sleep(std::time::Duration::from_secs(3));
 
     // Create document
     reporter.log("\nSTEP 1: Creating document...");
-    create_doc(&mut db, "test_doc", "channel1");
+    create_doc(&mut db_cblite, "test_doc", "channel1");
     std::thread::sleep(std::time::Duration::from_secs(3));
 
     let state1 = get_sync_xattr("test_doc");
@@ -82,8 +82,8 @@ fn main() {
 
     // Delete document
     reporter.log("\nSTEP 2: Deleting document...");
-    let mut doc = db.get_document("test_doc").unwrap();
-    db.delete_document(&mut doc).unwrap();
+    let mut doc = db_cblite.get_document("test_doc").unwrap();
+    db_cblite.delete_document(&mut doc).unwrap();
     std::thread::sleep(std::time::Duration::from_secs(3));
 
     let state2 = get_sync_xattr("test_doc");
@@ -96,7 +96,7 @@ fn main() {
 
     // Re-create document
     reporter.log("\nSTEP 3: Re-creating document...");
-    create_doc(&mut db, "test_doc", "channel1");
+    create_doc(&mut db_cblite, "test_doc", "channel1");
     std::thread::sleep(std::time::Duration::from_secs(3));
 
     let state3 = get_sync_xattr("test_doc");
@@ -118,7 +118,7 @@ fn main() {
 }
 
 #[allow(deprecated)]
-fn create_doc(db: &mut Database, id: &str, channel: &str) {
+fn create_doc(db_cblite: &mut Database, id: &str, channel: &str) {
     let mut doc = Document::new_with_id(id);
     doc.set_properties_as_json(
         &serde_json::json!({
@@ -128,12 +128,12 @@ fn create_doc(db: &mut Database, id: &str, channel: &str) {
         .to_string(),
     )
     .unwrap();
-    db.save_document(&mut doc).unwrap();
+    db_cblite.save_document(&mut doc).unwrap();
 }
 
-fn setup_replicator(db: Database, session_token: String) -> Replicator {
+fn setup_replicator(db_cblite: Database, session_token: String) -> Replicator {
     let repl_conf = ReplicatorConfiguration {
-        database: Some(db.clone()),
+        database: Some(db_cblite.clone()),
         endpoint: Endpoint::new_with_url(SYNC_GW_URL).unwrap(),
         replicator_type: ReplicatorType::PushAndPull,
         continuous: true,

@@ -10,7 +10,7 @@ fn main() {
     println!("This test validates tombstone purge logic with a short interval.");
     println!("Note: CBS minimum is 1 hour, so actual purge may not occur.\n");
 
-    let mut db = Database::open(
+    let mut db_cblite = Database::open(
         "tombstone_test_short",
         Some(DatabaseConfiguration {
             directory: Path::new("./"),
@@ -26,25 +26,25 @@ fn main() {
     println!("Sync gateway session token: {session_token}\n");
 
     // Setup replicator with auto-purge enabled
-    let mut repl =
-        setup_replicator(db.clone(), session_token).add_document_listener(Box::new(doc_listener));
+    let mut repl = setup_replicator(db_cblite.clone(), session_token)
+        .add_document_listener(Box::new(doc_listener));
 
     repl.start(false);
     std::thread::sleep(std::time::Duration::from_secs(3));
 
     // STEP 1: Create document in channel1 and replicate
     println!("STEP 1: Creating doc1 in channel1...");
-    create_doc(&mut db, "doc1", "channel1");
+    create_doc(&mut db_cblite, "doc1", "channel1");
     std::thread::sleep(std::time::Duration::from_secs(5));
 
     // Verify doc exists locally
-    assert!(get_doc(&db, "doc1").is_ok());
+    assert!(get_doc(&db_cblite, "doc1").is_ok());
     println!("✓ doc1 created and replicated\n");
 
     // STEP 2: Delete doc1 (creating a tombstone)
     println!("STEP 2: Deleting doc1 (creating tombstone)...");
-    let mut doc1 = get_doc(&db, "doc1").unwrap();
-    db.delete_document(&mut doc1).unwrap();
+    let mut doc1 = get_doc(&db_cblite, "doc1").unwrap();
+    db_cblite.delete_document(&mut doc1).unwrap();
     std::thread::sleep(std::time::Duration::from_secs(5));
     println!("✓ doc1 deleted locally\n");
 
@@ -106,11 +106,11 @@ fn main() {
 
     // STEP 9: Re-create doc1 and verify it's treated as new
     println!("STEP 9: Re-creating doc1 with same ID...");
-    create_doc(&mut db, "doc1", "channel1");
+    create_doc(&mut db_cblite, "doc1", "channel1");
     std::thread::sleep(std::time::Duration::from_secs(10));
 
     // Verify doc exists locally
-    if get_doc(&db, "doc1").is_ok() {
+    if get_doc(&db_cblite, "doc1").is_ok() {
         println!("✓ doc1 re-created successfully");
         println!("Check the replication logs above to verify if flags=1 (tombstone recognized)");
         println!("or flags=0 (treated as new document)\n");
@@ -127,7 +127,7 @@ fn main() {
 }
 
 #[allow(deprecated)]
-fn create_doc(db: &mut Database, id: &str, channel: &str) {
+fn create_doc(db_cblite: &mut Database, id: &str, channel: &str) {
     let mut doc = Document::new_with_id(id);
     doc.set_properties_as_json(
         &serde_json::json!({
@@ -137,7 +137,7 @@ fn create_doc(db: &mut Database, id: &str, channel: &str) {
         .to_string(),
     )
     .unwrap();
-    db.save_document(&mut doc).unwrap();
+    db_cblite.save_document(&mut doc).unwrap();
 
     println!(
         "  Created doc {id} with content: {}",
@@ -146,13 +146,13 @@ fn create_doc(db: &mut Database, id: &str, channel: &str) {
 }
 
 #[allow(deprecated)]
-fn get_doc(db: &Database, id: &str) -> Result<Document> {
-    db.get_document(id)
+fn get_doc(db_cblite: &Database, id: &str) -> Result<Document> {
+    db_cblite.get_document(id)
 }
 
-fn setup_replicator(db: Database, session_token: String) -> Replicator {
+fn setup_replicator(db_cblite: Database, session_token: String) -> Replicator {
     let repl_conf = ReplicatorConfiguration {
-        database: Some(db.clone()),
+        database: Some(db_cblite.clone()),
         endpoint: Endpoint::new_with_url(SYNC_GW_URL).unwrap(),
         replicator_type: ReplicatorType::PushAndPull,
         continuous: true,

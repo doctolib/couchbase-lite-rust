@@ -45,7 +45,7 @@ fn main() {
     get_metadata_purge_interval();
     reporter.log("");
 
-    let mut db = Database::open(
+    let mut db_cblite = Database::open(
         "tombstone_test_full",
         Some(DatabaseConfiguration {
             directory: Path::new("./"),
@@ -61,18 +61,18 @@ fn main() {
     reporter.log(&format!("Sync gateway session token: {session_token}\n"));
 
     // Setup replicator with auto-purge enabled
-    let mut repl =
-        setup_replicator(db.clone(), session_token).add_document_listener(Box::new(doc_listener));
+    let mut repl = setup_replicator(db_cblite.clone(), session_token)
+        .add_document_listener(Box::new(doc_listener));
 
     repl.start(false);
     std::thread::sleep(std::time::Duration::from_secs(3));
 
     // STEP 1: Create document in channel1 and replicate
     reporter.log("STEP 1: Creating doc1 in channel1...");
-    create_doc(&mut db, "doc1", "channel1");
+    create_doc(&mut db_cblite, "doc1", "channel1");
     std::thread::sleep(std::time::Duration::from_secs(5));
 
-    assert!(get_doc(&db, "doc1").is_ok());
+    assert!(get_doc(&db_cblite, "doc1").is_ok());
     let state1 = get_sync_xattr("doc1");
     reporter.checkpoint(
         "STEP_1_CREATED",
@@ -83,8 +83,8 @@ fn main() {
 
     // STEP 2: Delete doc1 (creating a tombstone)
     reporter.log("STEP 2: Deleting doc1 (creating tombstone)...");
-    let mut doc1 = get_doc(&db, "doc1").unwrap();
-    db.delete_document(&mut doc1).unwrap();
+    let mut doc1 = get_doc(&db_cblite, "doc1").unwrap();
+    db_cblite.delete_document(&mut doc1).unwrap();
     std::thread::sleep(std::time::Duration::from_secs(5));
 
     let state2 = get_sync_xattr("doc1");
@@ -187,7 +187,7 @@ fn main() {
 
     // STEP 9: Re-create doc1 and verify it's treated as new
     reporter.log("STEP 9: Re-creating doc1 with same ID...");
-    create_doc(&mut db, "doc1", "channel1");
+    create_doc(&mut db_cblite, "doc1", "channel1");
     std::thread::sleep(std::time::Duration::from_secs(10));
 
     let state9 = get_sync_xattr("doc1");
@@ -195,7 +195,7 @@ fn main() {
     reporter.checkpoint("STEP_9_RECREATED", state9, notes9);
 
     // Verify doc exists locally
-    if get_doc(&db, "doc1").is_ok() {
+    if get_doc(&db_cblite, "doc1").is_ok() {
         reporter.log("✓ doc1 re-created successfully");
         reporter.log("\n=== CRITICAL CHECK ===");
         reporter.log("Review the replication logs above:");
@@ -225,7 +225,7 @@ fn main() {
 }
 
 #[allow(deprecated)]
-fn create_doc(db: &mut Database, id: &str, channel: &str) {
+fn create_doc(db_cblite: &mut Database, id: &str, channel: &str) {
     let mut doc = Document::new_with_id(id);
     doc.set_properties_as_json(
         &serde_json::json!({
@@ -239,7 +239,7 @@ fn create_doc(db: &mut Database, id: &str, channel: &str) {
         .to_string(),
     )
     .unwrap();
-    db.save_document(&mut doc).unwrap();
+    db_cblite.save_document(&mut doc).unwrap();
 
     println!(
         "  Created doc {id} with content: {}",
@@ -248,13 +248,13 @@ fn create_doc(db: &mut Database, id: &str, channel: &str) {
 }
 
 #[allow(deprecated)]
-fn get_doc(db: &Database, id: &str) -> Result<Document> {
-    db.get_document(id)
+fn get_doc(db_cblite: &Database, id: &str) -> Result<Document> {
+    db_cblite.get_document(id)
 }
 
-fn setup_replicator(db: Database, session_token: String) -> Replicator {
+fn setup_replicator(db_cblite: Database, session_token: String) -> Replicator {
     let repl_conf = ReplicatorConfiguration {
-        database: Some(db.clone()),
+        database: Some(db_cblite.clone()),
         endpoint: Endpoint::new_with_url(SYNC_GW_URL).unwrap(),
         replicator_type: ReplicatorType::PushAndPull,
         continuous: true,
