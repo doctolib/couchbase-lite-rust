@@ -44,10 +44,11 @@ $ curl -XPUT -v "http://localhost:4985/my-db/" -H 'Content-Type: application/jso
 
 ## Automated Test Infrastructure
 
-The long-running tests (`tombstone_purge_test` and `tombstone_purge_test_short`) now include:
+The `tombstone_purge_test` includes comprehensive automation:
 
 - **Automatic Docker environment management**: Stops, rebuilds, and starts containers with correct configuration
 - **Git validation**: Ensures no uncommitted changes before running
+- **Timezone synchronization**: Verifies containers use same timezone as host
 - **Structured reporting**: Generates comprehensive test reports in `test_results/` directory
 
 ### Test Reports
@@ -61,6 +62,18 @@ Each test run generates a timestamped report directory containing:
 - `sgw_logs.log`: Sync Gateway container logs
 
 **Example report path**: `test_results/test_run_2025-11-01_08-00-00_8db78d6/`
+
+### Important Findings
+
+**Tombstone Purge Behavior:**
+- ✅ Tombstones are purged after 1 hour when purge interval is configured **at bucket creation**
+- ❌ Configuring purge interval after tombstones are created does NOT purge existing tombstones
+- ✅ Re-created documents are always treated as new (`flags=0`) even if tombstone persists
+
+**Reset Checkpoint Limitation:**
+- ❌ Reset checkpoint alone does NOT re-push unmodified documents
+- CBLite only pushes documents that changed since last successful sync
+- For BC-994 scenario, documents must be modified locally before reset to trigger push
 
 ## Running an example
 
@@ -98,15 +111,6 @@ Demonstrates auto-purge behavior when documents are moved to inaccessible channe
 $ cargo run --features=enterprise --example ticket_70596
 ```
 
-#### `tombstone_purge_test_short`
-Tests tombstone purge with a short interval (~5 minutes). Useful for quick validation of the test logic, though CBS may not actually purge tombstones below the 1-hour minimum.
-
-**Runtime: ~10 minutes**
-
-```shell
-$ cargo run --features=enterprise --example tombstone_purge_test_short
-```
-
 #### `tombstone_purge_test`
 Complete tombstone purge test following Couchbase support recommendations (Thomas). Tests whether tombstones can be completely purged from CBS and SGW after the minimum 1-hour interval, such that re-creating a document with the same ID is treated as a new document.
 
@@ -136,52 +140,6 @@ $ cargo run --features=enterprise --example tombstone_purge_test
 8. Re-create document with same ID and verify it's treated as new (flags=0, not flags=1)
 
 **Report location**: `test_results/test_run_<timestamp>_<commit_sha>/`
-
-#### `tombstone_resurrection_test`
-Complete test for BC-994 scenario: validates soft_delete behavior when documents resurrect after central tombstone expiry.
-
-**Runtime: ~75-80 minutes** (+ ~5 minutes for Docker rebuild)
-**Features**: Automatic Docker management, structured reporting, BC-994 logic validation
-
-```shell
-$ cargo run --features=enterprise --example tombstone_resurrection_test
-```
-
-**What it tests:**
-- ✅ Document deletion in central only (remains in cblite)
-- ✅ Central tombstone purge after 1 hour
-- ✅ Document resurrection via replication reset checkpoint
-- ✅ Sync function soft_delete routing (updatedAt > 1h → soft_deleted channel)
-- ✅ Auto-purge from cblite (document removed from accessible channels)
-- ✅ TTL-based purge from central (5 minutes for testing)
-
-**Test scenario:**
-1. Create doc with updatedAt=NOW, replicate to central, STOP replication
-2. Delete doc from central only (cblite keeps it)
-3. Wait 65 minutes for tombstone purge + compact CBS + SGW
-4. Verify central tombstone purged
-5. Restart replication with reset checkpoint → doc resurrects (NO modification to doc)
-6. Verify sync function routes to "soft_deleted" channel
-7. Verify auto-purge removes doc from cblite
-8. Wait 6 minutes for TTL expiry + compact
-9. Verify doc purged from central
-
-**Note**: The document is NOT modified before resurrection. The reset checkpoint
-alone should cause cblite to re-push the document to central where it will be
-detected as a resurrection by the sync function (no oldDoc + updatedAt > 1h).
-
-**Report location**: `test_results/test_run_<timestamp>_<commit_sha>/`
-
-**Sync function logic tested** (from billeo-engine PR #7672):
-```javascript
-if (!oldDoc && doc.updatedAt) {
-    if (updatedAt < now - 1hour) {  // Adapted for testing
-        channel("soft_deleted");
-        expiry(5 * 60);  // 5 minutes for testing
-        return;
-    }
-}
-```
 
 ### Utility functions
 
