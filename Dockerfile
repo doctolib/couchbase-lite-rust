@@ -1,4 +1,5 @@
-FROM --platform=amd64 rust@sha256:4a29b0db5c961cd530f39276ece3eb6e66925b59599324c8c19723b72a423615 AS strip-stage
+ARG PLATFORM=amd64
+FROM --platform=${PLATFORM} rust@sha256:4a29b0db5c961cd530f39276ece3eb6e66925b59599324c8c19723b72a423615 AS strip-stage
 ARG DIRNAME
 RUN apt-get update
 RUN apt-get -y install binutils binutils-aarch64-linux-gnu
@@ -12,4 +13,5 @@ RUN /usr/aarch64-linux-gnu/bin/strip /build/${DIRNAME}/lib/arm-linux-androideabi
 RUN strip /build/${DIRNAME}/lib/x86_64-pc-windows-gnu/cblite.dll -o /build/${DIRNAME}/lib/x86_64-pc-windows-gnu/cblite.stripped.dll
 
 FROM scratch AS strip
-COPY --from=strip-stage /build/${DIRNAME}/ .
+ARG DIRNAME
+COPY --from=strip-stage /build/${DIRNAME}/ ${DIRNAME}/

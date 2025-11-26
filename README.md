@@ -119,7 +119,7 @@ $ LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nigh
 
 [CBL_DOCS]: https://docs.couchbase.com/couchbase-lite/current/introduction.html
 
-[CBL_API_REFERENCE]: https://docs.couchbase.com/mobile/3.2.3/couchbase-lite-c/C/html/modules.html
+[CBL_API_REFERENCE]: https://docs.couchbase.com/mobile/3.2.4/couchbase-lite-c/C/html/modules.html
 
 [CBL_EDITIONS_DIFF]: https://www.couchbase.com/products/editions/
 
