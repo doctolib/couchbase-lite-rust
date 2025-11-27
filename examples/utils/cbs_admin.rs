@@ -40,25 +40,247 @@ pub fn compact_cbs_bucket() {
     }
 }
 
-pub fn check_doc_in_cbs(doc_id: &str) {
-    let url = format!("{CBS_URL}:8093/query/service");
+pub fn get_sync_xattr(doc_id: &str) -> Option<serde_json::Value> {
+    let url = "http://localhost:8093/query/service";
     let query = format!(
-        "SELECT META().id, META().deleted FROM `{CBS_BUCKET}` WHERE META().id = '{doc_id}'"
+        "SELECT META().xattrs._sync as sync_metadata FROM `{CBS_BUCKET}` USE KEYS ['{doc_id}']"
     );
     let body = serde_json::json!({"statement": query});
 
     let response = reqwest::blocking::Client::new()
-        .post(&url)
+        .post(url)
+        .basic_auth(CBS_ADMIN_USER, Some(CBS_ADMIN_PWD))
+        .json(&body)
+        .send()
+        .ok()?;
+
+    let text = response.text().ok()?;
+    let json: serde_json::Value = serde_json::from_str(&text).ok()?;
+
+    json.get("results")?
+        .as_array()?
+        .first()?
+        .get("sync_metadata")
+        .cloned()
+}
+
+pub fn check_doc_in_cbs(doc_id: &str) {
+    // Use port 8093 for Query service (not 8091 which is admin/REST API)
+    // Query XATTRs to see tombstones in shared bucket access mode
+    // The _sync xattr contains Sync Gateway metadata including deleted status
+    //
+    // WARNING: Querying _sync xattr directly is UNSUPPORTED in production per Sync Gateway docs
+    // This is only for testing/debugging purposes. The _sync structure can change between versions.
+    // Reference: https://docs.couchbase.com/sync-gateway/current/shared-bucket-access.html
+    let url = "http://localhost:8093/query/service";
+
+    // Query the entire _sync xattr to see its structure
+    // This helps debug what fields are actually available
+    let query = format!(
+        "SELECT META().id, META().xattrs._sync as sync_metadata FROM `{CBS_BUCKET}` USE KEYS ['{doc_id}']"
+    );
+    let body = serde_json::json!({"statement": query});
+
+    let response = reqwest::blocking::Client::new()
+        .post(url)
         .basic_auth(CBS_ADMIN_USER, Some(CBS_ADMIN_PWD))
         .json(&body)
         .send();
 
     match response {
         Ok(resp) => {
+            let status = resp.status();
             if let Ok(text) = resp.text() {
-                println!("CBS check for {doc_id}: {text}");
+                // Parse the response to show results more clearly
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if let Some(results) = json["results"].as_array() {
+                        if results.is_empty() {
+                            println!(
+                                "CBS check for {doc_id}: ✓ Document not found (completely purged)"
+                            );
+                        } else {
+                            println!("CBS check for {doc_id}: Found {} result(s)", results.len());
+                            for result in results {
+                                // Display the full sync_metadata to understand its structure
+                                if let Some(sync_meta) = result.get("sync_metadata") {
+                                    if sync_meta.is_null() {
+                                        println!(
+                                            "  ⚠ sync_metadata is NULL - may lack permissions to read system xattrs"
+                                        );
+                                        println!(
+                                            "  💡 System xattrs (starting with _) may require special RBAC roles"
+                                        );
+                                    } else {
+                                        println!("  📦 Full _sync xattr content:");
+                                        println!(
+                                            "{}",
+                                            serde_json::to_string_pretty(sync_meta).unwrap()
+                                        );
+
+                                        // Detect tombstone status from _sync.flags field
+                                        // flags == 1 indicates a deleted/tombstone document
+                                        // Other indicators: tombstoned_at field, channels.*.del == true
+                                        let flags = sync_meta
+                                            .get("flags")
+                                            .and_then(|v| v.as_i64())
+                                            .unwrap_or(0);
+
+                                        let has_tombstoned_at =
+                                            sync_meta.get("tombstoned_at").is_some();
+
+                                        let is_tombstone = flags == 1 || has_tombstoned_at;
+
+                                        if is_tombstone {
+                                            println!("\n  ✓ Document is TOMBSTONE");
+                                            println!("     - flags: {}", flags);
+                                            if has_tombstoned_at {
+                                                println!(
+                                                    "     - tombstoned_at: {}",
+                                                    sync_meta["tombstoned_at"]
+                                                );
+                                            }
+                                        } else {
+                                            println!("\n  ✓ Document is LIVE");
+                                            println!("     - flags: {}", flags);
+                                        }
+                                    }
+                                } else {
+                                    println!("  ⚠ No sync_metadata field in result");
+                                    println!(
+                                        "  Full result: {}",
+                                        serde_json::to_string_pretty(result).unwrap()
+                                    );
+                                }
+                            }
+                        }
+                    } else {
+                        println!("CBS check for {doc_id}: status={status}, response={text}");
+                    }
+                } else {
+                    println!("CBS check for {doc_id}: status={status}, response={text}");
+                }
+            } else {
+                println!("CBS check for {doc_id}: status={status}, could not read response");
             }
         }
         Err(e) => println!("CBS check error: {e}"),
     }
+}
+
+pub fn get_metadata_purge_interval() {
+    let url = format!("{CBS_URL}/pools/default/buckets/{CBS_BUCKET}");
+
+    let response = reqwest::blocking::Client::new()
+        .get(&url)
+        .basic_auth(CBS_ADMIN_USER, Some(CBS_ADMIN_PWD))
+        .send();
+
+    match response {
+        Ok(resp) => {
+            let status = resp.status();
+            if let Ok(text) = resp.text() {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                    // Search for purgeInterval in multiple possible locations
+                    let locations = vec![
+                        (
+                            "autoCompactionSettings.purgeInterval",
+                            json.get("autoCompactionSettings")
+                                .and_then(|a| a.get("purgeInterval")),
+                        ),
+                        ("purgeInterval", json.get("purgeInterval")),
+                    ];
+
+                    let mut found = false;
+                    for (path, value) in locations {
+                        if let Some(purge_interval) = value {
+                            println!(
+                                "✓ CBS metadata purge interval (at {path}): {}",
+                                purge_interval
+                            );
+                            if let Some(days) = purge_interval.as_f64() {
+                                println!(
+                                    "  = {days} days (~{:.1} hours, ~{:.0} minutes)",
+                                    days * 24.0,
+                                    days * 24.0 * 60.0
+                                );
+                            }
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if !found {
+                        println!("⚠ purgeInterval not found in bucket config");
+                        if let Some(auto_compact) = json.get("autoCompactionSettings") {
+                            println!("  autoCompactionSettings content:");
+                            println!("  {}", serde_json::to_string_pretty(auto_compact).unwrap());
+                        }
+                        println!("\n  Searching for 'purge' related fields...");
+                        if let Some(obj) = json.as_object() {
+                            for (key, value) in obj {
+                                if key.to_lowercase().contains("purge") {
+                                    println!("  Found: {} = {}", key, value);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    println!("Get metadata purge interval: status={status}, could not parse JSON");
+                }
+            } else {
+                println!("Get metadata purge interval: status={status}, could not read response");
+            }
+        }
+        Err(e) => println!("Get metadata purge interval error: {e}"),
+    }
+}
+
+pub fn set_metadata_purge_interval(days: f64) {
+    const MIN_PURGE_INTERVAL_DAYS: f64 = 0.04; // 1 hour minimum per CBS spec
+
+    if days < MIN_PURGE_INTERVAL_DAYS {
+        println!(
+            "⚠ Warning: CBS metadata purge interval minimum is {MIN_PURGE_INTERVAL_DAYS} days (1 hour)."
+        );
+        println!(
+            "  Requested: {days} days (~{:.1} minutes)",
+            days * 24.0 * 60.0
+        );
+        println!("  CBS may not enforce purge before the minimum interval.");
+        println!("  Proceeding with requested value for testing purposes...\n");
+    }
+
+    let url = format!("{CBS_URL}/pools/default/buckets/{CBS_BUCKET}");
+
+    // IMPORTANT: Must set autoCompactionDefined=true to enable per-bucket override
+    // parallelDBAndViewCompaction is also required by the API
+    let params = [
+        ("autoCompactionDefined", "true"),
+        ("purgeInterval", &days.to_string()),
+        ("parallelDBAndViewCompaction", "false"),
+    ];
+
+    let response = reqwest::blocking::Client::new()
+        .post(&url)
+        .basic_auth(CBS_ADMIN_USER, Some(CBS_ADMIN_PWD))
+        .form(&params)
+        .send();
+
+    match response {
+        Ok(resp) => {
+            let status = resp.status();
+            if let Ok(body) = resp.text() {
+                println!(
+                    "Set metadata purge interval to {days} days: status={status}, body={body}"
+                );
+            } else {
+                println!("Set metadata purge interval to {days} days: status={status}");
+            }
+        }
+        Err(e) => println!("Set metadata purge interval error: {e}"),
+    }
+
+    // Verify the setting was applied
+    println!("\nVerifying configuration:");
+    get_metadata_purge_interval();
 }
