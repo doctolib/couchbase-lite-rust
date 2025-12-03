@@ -20,18 +20,24 @@ Installation instructions are [here][BINDGEN_INSTALL].
 
 ### 2. Build!
 
-There two different editions of Couchbase Lite C: community & enterprise.
+There are two different editions of Couchbase Lite C: community & enterprise.
 You can find the differences [here][CBL_EDITIONS_DIFF].
 
-When building or declaring this repository as a dependency, you need to specify the edition through a cargo feature:
+**By default, the community edition is used.** To enable enterprise features, use the `enterprise` cargo feature:
 
 ```shell
-$ cargo build --features=community
+$ cargo build  # Uses community edition
 ```
 
 ```shell
-$ cargo build --features=enterprise
+$ cargo build --features=enterprise  # Uses enterprise edition
 ```
+
+The enterprise feature is additive and provides additional capabilities:
+- Database encryption
+- P2P replication (local database endpoints)
+- Document property encryption/decryption during replication
+- TLS identity management
 
 ## Maintaining
 
@@ -70,14 +76,15 @@ New C features should also be added to the Rust API at some point.
 ### Test
 
 Tests can be found in the `tests` subdirectory.
-Test are run in the GitHub wrokflow `Test`. You can find the commands used there.
+Tests are run in the GitHub workflow `Test`. You can find the commands used there.
 
 There are three variations:
 
 ### Nominal run
 
 ```shell
-$ cargo test --features=enterprise
+$ cargo test  # Tests community edition
+$ cargo test --features=enterprise  # Tests enterprise edition
 ```
 
 ### Run with Couchbase Lite C leak check
@@ -90,6 +97,7 @@ If this step fails in one of your pull requests, you should look into the `take_
 - `reference` just references the pointer, it will increase the ref count of CBL pointers so releasing it will not free the pointer
 
 ```shell
+$ LEAK_CHECK=y cargo test -- --test-threads 1
 $ LEAK_CHECK=y cargo test --features=enterprise -- --test-threads 1
 ```
 

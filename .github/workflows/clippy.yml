@@ -10,7 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        version: [community, enterprise]
+        edition: [community, enterprise]
+        include:
+          - edition: community
+            cargo_flags: ""
+          - edition: enterprise
+            cargo_flags: "--features=enterprise"
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
 
@@ -29,4 +34,4 @@ jobs:
         shell: bash
         run: |
           # shellcheck disable=SC2046
-          cargo clippy --color always --features=${{ matrix.version }}
+          cargo clippy --color always ${{ matrix.cargo_flags }}

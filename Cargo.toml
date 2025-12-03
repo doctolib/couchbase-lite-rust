@@ -47,7 +47,11 @@ incremental = false
 # See: https://github.com/johnthagen/min-sized-rust
 
 [features]
-community = []
+# Enable this feature for Enterprise edition capabilities:
+# - Database encryption
+# - P2P replication (local database endpoints)
+# - Document property encryption/decryption during replication
+# - TLS identity management
 enterprise = []
 
 unsafe-threads-test = []
