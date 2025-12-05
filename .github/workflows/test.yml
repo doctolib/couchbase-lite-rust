@@ -12,7 +12,12 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        version: [community, enterprise]
+        edition: [community, enterprise]
+        include:
+          - edition: community
+            cargo_flags: ""
+          - edition: enterprise
+            cargo_flags: "--features=enterprise"
     steps:
       - name: Install apt-get
         run: sudo apt-get install -y clang llvm
@@ -23,8 +28,8 @@ jobs:
             components: rustfmt, clippy
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
       - name: Run tests
-        run: cargo test --features=${{ matrix.version }} --verbose
+        run: cargo test ${{ matrix.cargo_flags }} --verbose
       - name: Run tests with Couchbase Lite C leak check
-        run: LEAK_CHECK=y cargo test --features=${{ matrix.version }} --verbose -- --test-threads 1
+        run: LEAK_CHECK=y cargo test ${{ matrix.cargo_flags }} --verbose -- --test-threads 1
       - name: Run tests (with address sanitizer)
-        run: LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nightly test --target x86_64-unknown-linux-gnu --features=${{ matrix.version }} --verbose
+        run: LSAN_OPTIONS=suppressions=san.supp RUSTFLAGS="-Zsanitizer=address" cargo +nightly test --target x86_64-unknown-linux-gnu ${{ matrix.cargo_flags }} --verbose
