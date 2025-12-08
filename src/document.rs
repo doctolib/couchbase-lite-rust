@@ -65,6 +65,7 @@ pub enum ConcurrencyControl {
 /// if the save would cause a conflict, i.e. if the document in the database has been updated
 /// (probably by a pull replicator, or by application code on another thread)
 /// since it was loaded into the CBLDocument being saved.
+/// Return true to save the document, false to cancel the save.
 type ConflictHandler = fn(&mut Document, Option<&Document>) -> bool;
 #[unsafe(no_mangle)]
 unsafe extern "C" fn c_conflict_handler(
