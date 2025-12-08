@@ -206,7 +206,7 @@ fn database_save_document_resolving() {
         document = default_collection(db)
             .save_document_resolving(&mut document, |document_a, document_b| {
                 let property_a = document_a.properties().get("foo").as_i64_or_0();
-                let property_b = document_b.properties().get("foo").as_i64_or_0();
+                let property_b = document_b.unwrap().properties().get("foo").as_i64_or_0();
                 document_a
                     .mutable_properties()
                     .at("foo")
