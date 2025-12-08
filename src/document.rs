@@ -65,7 +65,7 @@ pub enum ConcurrencyControl {
 /// if the save would cause a conflict, i.e. if the document in the database has been updated
 /// (probably by a pull replicator, or by application code on another thread)
 /// since it was loaded into the CBLDocument being saved.
-type ConflictHandler = fn(&mut Document, &Document) -> bool;
+type ConflictHandler = fn(&mut Document, Option<&Document>) -> bool;
 #[unsafe(no_mangle)]
 unsafe extern "C" fn c_conflict_handler(
     context: *mut ::std::os::raw::c_void,
@@ -74,10 +74,15 @@ unsafe extern "C" fn c_conflict_handler(
 ) -> bool {
     unsafe {
         let callback: ConflictHandler = std::mem::transmute(context);
+        let remote_document = &Document::reference(conflicting_document as *mut CBLDocument);
 
         callback(
             &mut Document::reference(document_being_saved),
-            &Document::reference(conflicting_document as *mut CBLDocument),
+            if conflicting_document.is_null() {
+                None
+            } else {
+                Some(remote_document)
+            },
         )
     }
 }
