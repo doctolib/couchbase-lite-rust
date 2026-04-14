@@ -64,9 +64,6 @@ $ brew install bash
 ```
 
 If the script was successful:
-- Change the link `CBL_API_REFERENCE` in this README
-- Change the version in the test `couchbase_lite_c_version_test`
-- Update the version in `Cargo.toml`
 - Fix the compilation in both editions
 - Fix the tests in both editions
 - Create pull request
