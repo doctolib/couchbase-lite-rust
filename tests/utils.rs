@@ -72,7 +72,21 @@ impl Drop for LeakChecker {
     fn drop(&mut self) {
         if self.is_checking {
             println!("Checking if Couchbase Lite objects were leaked by this test");
-            self.end_instance_count = instance_count();
+
+            // Poll instance_count() briefly to allow the C library to finish
+            // async cleanup of internal objects (e.g. replicator network connections).
+            let max_wait = time::Duration::from_secs(5);
+            let poll_interval = time::Duration::from_millis(100);
+            let start = time::Instant::now();
+            loop {
+                self.end_instance_count = instance_count();
+                if self.end_instance_count == self.start_instance_count
+                    || start.elapsed() >= max_wait
+                {
+                    break;
+                }
+                thread::sleep(poll_interval);
+            }
 
             if self.start_instance_count != self.end_instance_count {
                 println!("Leaks detected :-(");
