@@ -114,7 +114,7 @@ impl Blob {
     }
 
     /// Opens a stream for reading a blob's content from disk.
-    pub fn open_content(&self) -> Result<BlobReader> {
+    pub fn open_content(&self) -> Result<BlobReader<'_>> {
         check_ptr(
             |err| unsafe { CBLBlob_OpenContentStream(self.get_ref(), err) },
             |stream| BlobReader {

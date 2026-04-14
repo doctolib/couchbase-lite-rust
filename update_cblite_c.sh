@@ -67,6 +67,8 @@ else
   echo
 fi
 
+major_version="${version%%.*}"
+
 tmpFolder=$(mktemp -d)
 echo "Temporary directory ${tmpFolder}"
 echo
@@ -174,11 +176,11 @@ do
                 mkdir $platformFolder
 
                 libFile="${unzipPlatformFolder}/libcblite-${version}/lib/x86_64-linux-gnu/libcblite.so.${version}"
-                libDestinationFile="${platformFolder}/libcblite.so.3"
+                libDestinationFile="${platformFolder}/libcblite.so.${major_version}"
                 cp $libFile $libDestinationFile
 
-                # There are required ICU libs already present in the existing package
-                cp libcblite_$variant/lib/x86_64-unknown-linux-gnu/libicu* $platformFolder
+                # Copy required ICU libs from the newly downloaded package
+                cp ${unzipPlatformFolder}/libcblite-${version}/lib/x86_64-linux-gnu/libicu* $platformFolder
 
                 ;;
 
@@ -199,7 +201,7 @@ do
                 mkdir $platformFolder
 
                 libFile="${unzipPlatformFolder}/libcblite-${version}/lib/libcblite.${version}.dylib"
-                libDestinationFile="${platformFolder}/libcblite.3.dylib"
+                libDestinationFile="${platformFolder}/libcblite.${major_version}.dylib"
                 cp $libFile $libDestinationFile
 
                 ;;

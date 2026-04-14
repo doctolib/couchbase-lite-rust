@@ -96,7 +96,7 @@ impl MutableArray {
         unsafe { FLMutableArray_IsChanged(self.get_ref()) }
     }
 
-    pub fn at(&mut self, index: u32) -> Option<Slot> {
+    pub fn at(&mut self, index: u32) -> Option<Slot<'_>> {
         if self.count() > index {
             Some(unsafe {
                 Slot {
@@ -109,7 +109,7 @@ impl MutableArray {
         }
     }
 
-    pub fn append(&mut self) -> Slot {
+    pub fn append(&mut self) -> Slot<'_> {
         unsafe {
             Slot {
                 cbl_ref: FLMutableArray_Append(self.get_ref()),
