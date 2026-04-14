@@ -179,8 +179,8 @@ do
                 libDestinationFile="${platformFolder}/libcblite.so.${major_version}"
                 cp $libFile $libDestinationFile
 
-                # Copy required ICU libs from the newly downloaded package
-                cp ${unzipPlatformFolder}/libcblite-${version}/lib/x86_64-linux-gnu/libicu* $platformFolder
+                # There are required ICU libs already present in the existing package
+                cp libcblite_$variant/lib/x86_64-unknown-linux-gnu/libicu* $platformFolder
 
                 ;;
 
