@@ -298,26 +298,15 @@ pub fn copy_lib() -> Result<(), Box<dyn Error>> {
             let major = cbl_major_version();
             let versioned_so = format!("libcblite.so.{major}");
             fs::copy(lib_path.join(&versioned_so), dest_path.join(&versioned_so))?;
-            fs::copy(
-                lib_path.join("libicudata.so.66"),
-                dest_path.join("libicudata.so.66"),
-            )?;
-            fs::copy(
-                lib_path.join("libicui18n.so.66"),
-                dest_path.join("libicui18n.so.66"),
-            )?;
-            fs::copy(
-                lib_path.join("libicuio.so.66"),
-                dest_path.join("libicuio.so.66"),
-            )?;
-            fs::copy(
-                lib_path.join("libicutu.so.66"),
-                dest_path.join("libicutu.so.66"),
-            )?;
-            fs::copy(
-                lib_path.join("libicuuc.so.66"),
-                dest_path.join("libicuuc.so.66"),
-            )?;
+            // Copy bundled ICU libraries (version may change across CBL releases)
+            for entry in fs::read_dir(&lib_path)? {
+                let entry = entry?;
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                if name.starts_with("libicu") && name.contains(".so.") {
+                    fs::copy(entry.path(), dest_path.join(&*name))?;
+                }
+            }
             // Needed only for build, not required for run
             fs::copy(lib_path.join(&versioned_so), dest_path.join("libcblite.so"))?;
         }
