@@ -180,6 +180,8 @@ do
                 cp $libFile $libDestinationFile
 
                 # There are required ICU libs already present in the existing package
+                # WARNING: ICU libs are NOT included in Couchbase Lite C packages and must be vendored manually.
+                # When upgrading to a new CBL major version, verify that the ICU version is still compatible.
                 cp libcblite_$variant/lib/x86_64-unknown-linux-gnu/libicu* $platformFolder
 
                 ;;
