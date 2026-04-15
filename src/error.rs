@@ -249,10 +249,10 @@ impl Error {
 
     /// Returns a message describing an error.
     pub fn message(&self) -> String {
-        if let ErrorCode::CouchbaseLite(e) = self.code {
-            if e == CouchbaseLiteError::UntranslatableError {
-                return "Unknown error".to_string();
-            }
+        if let ErrorCode::CouchbaseLite(e) = self.code
+            && e == CouchbaseLiteError::UntranslatableError
+        {
+            return "Unknown error".to_string();
         }
         unsafe {
             CBLError_Message(&self.as_cbl_error())

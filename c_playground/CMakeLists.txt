@@ -6,4 +6,5 @@ include_directories(${CMAKE_SOURCE_DIR}/../libcblite_enterprise/include)
 
 add_executable(Main main.c)
 
-target_link_libraries(Main PUBLIC ${CMAKE_SOURCE_DIR}/../libcblite_enterprise/lib/macos/libcblite.3.dylib)
+file(GLOB CBLITE_LIB "${CMAKE_SOURCE_DIR}/../libcblite_enterprise/lib/macos/libcblite.*.dylib")
+target_link_libraries(Main PUBLIC ${CBLITE_LIB})

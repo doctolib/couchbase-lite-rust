@@ -67,6 +67,8 @@ else
   echo
 fi
 
+major_version="${version%%.*}"
+
 tmpFolder=$(mktemp -d)
 echo "Temporary directory ${tmpFolder}"
 echo
@@ -174,10 +176,12 @@ do
                 mkdir $platformFolder
 
                 libFile="${unzipPlatformFolder}/libcblite-${version}/lib/x86_64-linux-gnu/libcblite.so.${version}"
-                libDestinationFile="${platformFolder}/libcblite.so.3"
+                libDestinationFile="${platformFolder}/libcblite.so.${major_version}"
                 cp $libFile $libDestinationFile
 
                 # There are required ICU libs already present in the existing package
+                # WARNING: ICU libs are NOT included in Couchbase Lite C packages and must be vendored manually.
+                # When upgrading to a new CBL major version, verify that the ICU version is still compatible.
                 cp libcblite_$variant/lib/x86_64-unknown-linux-gnu/libicu* $platformFolder
 
                 ;;
@@ -199,7 +203,7 @@ do
                 mkdir $platformFolder
 
                 libFile="${unzipPlatformFolder}/libcblite-${version}/lib/libcblite.${version}.dylib"
-                libDestinationFile="${platformFolder}/libcblite.3.dylib"
+                libDestinationFile="${platformFolder}/libcblite.${major_version}.dylib"
                 cp $libFile $libDestinationFile
 
                 ;;
@@ -282,6 +286,19 @@ do
 done
 
 rm -rf $tmpFolder
+
+# ############################# #
+# Update version references     #
+# ############################# #
+
+echoGreen "Update version references"
+
+sed -i '' "s/^version = \".*\"/version = \"${version}-0\"/" Cargo.toml
+sed -i '' "s/couchbase_lite_c_version(), \".*\"/couchbase_lite_c_version(), \"${version}\"/" tests/lib_test.rs
+sed -i '' "s|mobile/[0-9]*\.[0-9]*\.[0-9]*/couchbase-lite-c|mobile/${version}/couchbase-lite-c|" README.md
+
+echoGreen "Version references updated"
+echo
 
 echoGreen "All good :-)"
 echoGreen "Next steps: build OK, tests OK & create a pull request"

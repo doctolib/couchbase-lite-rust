@@ -28,6 +28,7 @@ extern crate fs_extra;
 use std::env;
 use std::error::Error;
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::Command;
 use fs_extra::dir;
@@ -41,6 +42,31 @@ static CBL_INCLUDE_DIR: &str = "libcblite_enterprise/include";
 static CBL_LIB_DIR: &str = "libcblite_community/lib";
 #[cfg(feature = "enterprise")]
 static CBL_LIB_DIR: &str = "libcblite_enterprise/lib";
+
+/// Parses the CBL major version from CBL_Edition.h (e.g. "3" from `#define CBLITE_VERSION "3.2.4"`).
+fn cbl_major_version() -> String {
+    let header_path = PathBuf::from(CBL_INCLUDE_DIR).join("cbl/CBL_Edition.h");
+    let file = fs::File::open(&header_path)
+        .unwrap_or_else(|e| panic!("Cannot open {}: {}", header_path.display(), e));
+
+    for line in BufReader::new(file).lines() {
+        let line = line.expect("Failed to read line from CBL_Edition.h");
+        if let Some(version_str) = line
+            .strip_prefix("#define CBLITE_VERSION \"")
+            .and_then(|s| s.strip_suffix('"'))
+        {
+            return version_str
+                .split('.')
+                .next()
+                .expect("CBLITE_VERSION has no major component")
+                .to_string();
+        }
+    }
+    panic!(
+        "Could not find #define CBLITE_VERSION in {}",
+        header_path.display()
+    );
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
     generate_bindings()?;
@@ -269,44 +295,33 @@ pub fn copy_lib() -> Result<(), Box<dyn Error>> {
             )?;
         }
         "linux" => {
-            fs::copy(
-                lib_path.join("libcblite.so.3"),
-                dest_path.join("libcblite.so.3"),
-            )?;
-            fs::copy(
-                lib_path.join("libicudata.so.66"),
-                dest_path.join("libicudata.so.66"),
-            )?;
-            fs::copy(
-                lib_path.join("libicui18n.so.66"),
-                dest_path.join("libicui18n.so.66"),
-            )?;
-            fs::copy(
-                lib_path.join("libicuio.so.66"),
-                dest_path.join("libicuio.so.66"),
-            )?;
-            fs::copy(
-                lib_path.join("libicutu.so.66"),
-                dest_path.join("libicutu.so.66"),
-            )?;
-            fs::copy(
-                lib_path.join("libicuuc.so.66"),
-                dest_path.join("libicuuc.so.66"),
-            )?;
+            let major = cbl_major_version();
+            let versioned_so = format!("libcblite.so.{major}");
+            fs::copy(lib_path.join(&versioned_so), dest_path.join(&versioned_so))?;
+            // Copy bundled ICU libraries (version may change across CBL releases)
+            // WARNING: ICU libs are vendored manually, not from Couchbase packages.
+            // When upgrading to a new CBL major version, verify that the ICU version is still compatible.
+            for entry in fs::read_dir(&lib_path)? {
+                let entry = entry?;
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                if name.starts_with("libicu") && name.contains(".so.") {
+                    fs::copy(entry.path(), dest_path.join(&*name))?;
+                }
+            }
             // Needed only for build, not required for run
-            fs::copy(
-                lib_path.join("libcblite.so.3"),
-                dest_path.join("libcblite.so"),
-            )?;
+            fs::copy(lib_path.join(&versioned_so), dest_path.join("libcblite.so"))?;
         }
         "macos" => {
+            let major = cbl_major_version();
+            let versioned_dylib = format!("libcblite.{major}.dylib");
             fs::copy(
-                lib_path.join("libcblite.3.dylib"),
-                dest_path.join("libcblite.3.dylib"),
+                lib_path.join(&versioned_dylib),
+                dest_path.join(&versioned_dylib),
             )?;
             // Needed only for build, not required for run
             fs::copy(
-                lib_path.join("libcblite.3.dylib"),
+                lib_path.join(&versioned_dylib),
                 dest_path.join("libcblite.dylib"),
             )?;
         }
