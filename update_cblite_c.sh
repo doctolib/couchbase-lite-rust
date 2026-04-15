@@ -74,7 +74,8 @@ echo "Temporary directory ${tmpFolder}"
 echo
 
 declare -A platforms=(
-    [linux]=linux-x86_64.tar.gz 
+    [linux]=linux-x86_64.tar.gz
+    [linux-arm64]=linux-arm64.tar.gz
     [windows]=windows-x86_64.zip
     [macos]=macos.zip
     [android]=android.zip
@@ -179,10 +180,15 @@ do
                 libDestinationFile="${platformFolder}/libcblite.so.${major_version}"
                 cp $libFile $libDestinationFile
 
-                # There are required ICU libs already present in the existing package
-                # WARNING: ICU libs are NOT included in Couchbase Lite C packages and must be vendored manually.
-                # When upgrading to a new CBL major version, verify that the ICU version is still compatible.
-                cp libcblite_$variant/lib/x86_64-unknown-linux-gnu/libicu* $platformFolder
+                ;;
+
+            linux-arm64)
+                platformFolder="${libFolder}/aarch64-unknown-linux-gnu"
+                mkdir $platformFolder
+
+                libFile="${unzipPlatformFolder}/libcblite-${version}/lib/aarch64-linux-gnu/libcblite.so.${version}"
+                libDestinationFile="${platformFolder}/libcblite.so.${major_version}"
+                cp $libFile $libDestinationFile
 
                 ;;
 
