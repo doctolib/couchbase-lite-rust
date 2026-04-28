@@ -35,16 +35,6 @@ pub static DEFAULT_NAME: &str = "_default";
 ///    When the database is closed or released, the collection objects will become invalid,
 ///    most operations on the invalid \ref CBLCollection object will fail with either the
 ///    \ref kCBLErrorNotOpen error or null/zero/empty result.
-///
-///    ##Legacy Database and API
-///    When using the legacy database, the existing documents and indexes in the database will be
-///    automatically migrated to the default collection.
-///
-///    Any pre-existing database functions that refer to documents, listeners, and indexes without
-///    specifying a collection such as \ref CBLDatabase_GetDocument will implicitly operate on
-///    the default collection. In other words, they behave exactly the way they used to, but
-///    collection-aware code should avoid them and use the new Collection API instead.
-///    These legacy functions are deprecated and will be removed eventually.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Collection {
     cbl_ref: *mut CBLCollection,

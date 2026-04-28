@@ -39,7 +39,6 @@ use crate::{
         kCBLDocumentFlagsDeleted, kCBLProxyHTTP, kCBLProxyHTTPS, kCBLReplicatorBusy,
         kCBLReplicatorConnecting, kCBLReplicatorIdle, kCBLReplicatorOffline, kCBLReplicatorStopped,
         kCBLReplicatorTypePull, kCBLReplicatorTypePush, kCBLReplicatorTypePushAndPull,
-        CBLReplicator_IsDocumentPending2, CBLReplicator_PendingDocumentIDs2,
         CBLReplicationCollection,
     },
     MutableArray, Listener,
@@ -656,13 +655,9 @@ pub extern "C" fn c_collection_property_decryptor(
 
 #[derive(Default)]
 pub struct ReplicationConfigurationContext {
-    pub push_filter: Option<ReplicationFilter>, // TODO: deprecated
-    pub pull_filter: Option<ReplicationFilter>, // TODO: deprecated
-    pub conflict_resolver: Option<ConflictResolver>, // TODO: deprecated
-    #[cfg(feature = "enterprise")]
-    pub default_collection_property_encryptor: Option<DefaultCollectionPropertyEncryptor>, // TODO: deprecated
-    #[cfg(feature = "enterprise")]
-    pub default_collection_property_decryptor: Option<DefaultCollectionPropertyDecryptor>, // TODO: deprecated
+    pub push_filter: Option<ReplicationFilter>,
+    pub pull_filter: Option<ReplicationFilter>,
+    pub conflict_resolver: Option<ConflictResolver>,
     #[cfg(feature = "enterprise")]
     pub collection_property_encryptor: Option<CollectionPropertyEncryptor>,
     #[cfg(feature = "enterprise")]
@@ -670,12 +665,18 @@ pub struct ReplicationConfigurationContext {
 }
 
 pub struct ReplicationCollection {
+    /// The collection (Required)
     pub collection: Collection,
-    pub conflict_resolver: Option<ConflictResolver>, // Optional conflict-resolver callback.
-    pub push_filter: Option<ReplicationFilter>, // Optional callback to filter which docs are pushed.
-    pub pull_filter: Option<ReplicationFilter>, // Optional callback to validate incoming docs.
-    pub channels: MutableArray,                 // Optional set of channels to pull from
-    pub document_ids: MutableArray,             // Optional set of document IDs to replicate
+    /// Conflict-resolver callback.
+    pub conflict_resolver: Option<ConflictResolver>,
+    /// Callback to filter which docs are pushed.
+    pub push_filter: Option<ReplicationFilter>,
+    /// Callback to filter which docs are pulled.
+    pub pull_filter: Option<ReplicationFilter>,
+    /// Set of channels to pull from. Only applicable when replicating with Sync Gateway.
+    pub channels: MutableArray,
+    /// Set of document IDs to replicate.
+    pub document_ids: MutableArray,
 }
 
 impl ReplicationCollection {
@@ -702,51 +703,71 @@ impl ReplicationCollection {
 
 /** The configuration of a replicator. */
 pub struct ReplicatorConfiguration {
-    // TODO: deprecated
-    pub database: Option<Database>, // The database to replicate. When setting the database, ONLY the default collection will be used for replication.
-    pub endpoint: Endpoint,         // The address of the other database to replicate with
-    pub replicator_type: ReplicatorType, // Push, pull or both
-    pub continuous: bool,           // Continuous replication?
-    //-- Auto Purge:
-    /**
-    If auto purge is active, then the library will automatically purge any documents that the replicating
-    user loses access to via the Sync Function on Sync Gateway.  If disableAutoPurge is true, this behavior
-    is disabled and an access removed event will be sent to any document listeners that are active on the
-    replicator.
+    /** Required fields: */
 
-    IMPORTANT: For performance reasons, the document listeners must be added *before* the replicator is started
-    or they will not receive the events.
-    */
+    /// The collections to replicate with the target's endpoint (Required)
+    pub collections: Vec<ReplicationCollection>,
+    /// The replication endpoint to replicate with (Required)
+    pub endpoint: Endpoint,
+
+    /** Core options and context: */
+
+    /// Push, pull or both
+    pub replicator_type: ReplicatorType,
+    /// Continuous replication?
+    pub continuous: bool,
+    /// Authentication credentials, if needed
+    pub authenticator: Option<Authenticator>,
+
+    /** TLS settings */
+
+    /// X.509 certificate (PEM or DER) to pin for TLS connections. The cert chain is valid only if it contains this cert.
+    pub pinned_server_certificate: Option<Vec<u8>>,
+
+    //** Auto Purge: */
+
+    /** If auto purge is active, documents that the replicating user loses access to will be purged automatically.
+        If disableAutoPurge is true, this behavior is disabled and an access removed event will be sent to
+        document replication listeners if specified. Default is \ref kCBLDefaultReplicatorDisableAutoPurge.
+
+        \note Auto Purge is only applicable when replicating with Sync Gateway,
+              and will not be performed when a documentIDs filter is specified. */
     pub disable_auto_purge: bool,
-    //-- Retry Logic:
-    pub max_attempts: u32, //< Max retry attempts where the initial connect to replicate counts toward the given value.
-    //< Specify 0 to use the default value, 10 times for a non-continuous replicator and max-int time for a continuous replicator. Specify 1 means there will be no retry after the first attempt.
-    pub max_attempt_wait_time: u32, //< Max wait time between retry attempts in seconds. Specify 0 to use the default value of 300 seconds.
-    //-- WebSocket:
-    pub heartbeat: u32, //< The heartbeat interval in seconds. Specify 0 to use the default value of 300 seconds.
-    pub authenticator: Option<Authenticator>, // Authentication credentials, if needed
-    pub proxy: Option<ProxySettings>, // HTTP client proxy settings
-    pub headers: HashMap<String, String>, // Extra HTTP headers to add to the WebSocket request
-    //-- TLS settings:
-    pub pinned_server_certificate: Option<Vec<u8>>, // An X.509 cert to "pin" TLS connections to (PEM or DER)
-    pub trusted_root_certificates: Option<Vec<u8>>, // Set of anchor certs (PEM format)
-    //-- Filtering:
-    // TODO: deprecated
-    pub channels: MutableArray, // Optional set of channels to pull from
-    // TODO: deprecated
-    pub document_ids: MutableArray, // Optional set of document IDs to replicate
-    pub collections: Option<Vec<ReplicationCollection>>, // The collections to replicate with the target's endpoint (Required if the database is not set).
-    //-- Advanced HTTP settings:
+
+    //** Retry Logic: */
+
+    /// Max retry attempts where the initial connect to replicate counts toward the given value.
+    pub max_attempts: u32,
+    /// Max wait time between retry attempts in seconds.
+    pub max_attempt_wait_time: u32,
+
+    //** WebSocket: */
+
+    /// The heartbeat interval in seconds.
+    pub heartbeat: u32,
+
+    //** */ HTTP settings: */
+
+    /// Extra HTTP headers to add to the WebSocket request
+    pub headers: HashMap<String, String>,
+    /// HTTP client proxy settings
+    pub proxy: Option<ProxySettings>,
     /** The option to remove the restriction that does not allow the replicator to save the parent-domain
-    cookies, the cookies whose domains are the parent domain of the remote host, from the HTTP
-    response. For example, when the option is set to true, the cookies whose domain are “.foo.com”
-    returned by “bar.foo.com” host will be permitted to save. This is only recommended if the host
-    issuing the cookie is well trusted.
-    This option is disabled by default (see \ref kCBLDefaultReplicatorAcceptParentCookies) which means
-    that the parent-domain cookies are not permitted to save by default. */
+        cookies, the cookies whose domains are the parent domain of the remote host, from the HTTP
+        response. For example, when the option is set to true, the cookies whose domain are “.foo.com”
+        returned by “bar.foo.com” host will be permitted to save. This is only recommended if the host
+        issuing the cookie is well trusted.
+
+        This option is disabled by default (see \ref kCBLDefaultReplicatorAcceptParentCookies) which means
+        that the parent-domain cookies are not permitted to save by default. */
     pub accept_parent_domain_cookies: bool,
-    /** Specify the replicator to accept only self-signed certs. Any non-self-signed certs will be rejected
-    to avoid accidentally using this mode with the non-self-signed certs in production. */
+
+    //** Advance TLS Settings: */
+
+    /// Set of anchor certs (PEM format)
+    pub trusted_root_certificates: Option<Vec<u8>>,
+
+    /** Accept only self-signed certificates; any other certificates are rejected. */
     #[cfg(feature = "enterprise")]
     pub accept_only_self_signed_server_certificate: bool,
 }
@@ -780,68 +801,52 @@ impl Replicator {
     ) -> Result<Self> {
         unsafe {
             let headers = MutableDict::from_hashmap(&config.headers);
-            let mut collections: Option<Vec<CBLReplicationCollection>> =
-                config.collections.as_ref().map(|collections| {
-                    collections
-                        .iter()
-                        .map(|c| c.to_cbl_replication_collection())
-                        .collect()
-                });
+            let mut collections: Vec<CBLReplicationCollection> = config
+                .collections
+                .iter()
+                .map(ReplicationCollection::to_cbl_replication_collection)
+                .collect();
 
             let cbl_config = CBLReplicatorConfiguration {
-                database: config
-                    .database
-                    .as_ref()
-                    .map(|d| d.get_ref())
-                    .unwrap_or(ptr::null_mut()),
+                //-- Required fields:
+                collections: collections.as_mut_ptr(),
+                collectionCount: collections.len(),
                 endpoint: config.endpoint.get_ref(),
+                //-- Core options and context:
                 replicatorType: config.replicator_type.clone().into(),
                 continuous: config.continuous,
-                disableAutoPurge: config.disable_auto_purge,
-                maxAttempts: config.max_attempts,
-                maxAttemptWaitTime: config.max_attempt_wait_time,
-                heartbeat: config.heartbeat,
                 authenticator: config
                     .authenticator
                     .as_ref()
                     .map_or(ptr::null_mut(), CblRef::get_ref),
-                proxy: config
-                    .proxy
-                    .as_ref()
-                    .map_or(ptr::null_mut(), CblRef::get_ref),
-                headers: headers.as_dict().get_ref(),
+                context: std::ptr::addr_of!(*context) as *mut _,
+                //-- TLS settings
                 pinnedServerCertificate: config
                     .pinned_server_certificate
                     .as_ref()
                     .map_or(slice::NULL_SLICE, |c| slice::from_bytes(c).get_ref()),
+                //-- Auto Purge:
+                disableAutoPurge: config.disable_auto_purge,
+                //-- Retry Logic:
+                maxAttempts: config.max_attempts,
+                maxAttemptWaitTime: config.max_attempt_wait_time,
+                //-- WebSocket:
+                heartbeat: config.heartbeat,
+                //-- HTTP settings:
+                headers: headers.as_dict().get_ref(),
+                proxy: config
+                    .proxy
+                    .as_ref()
+                    .map_or(ptr::null_mut(), CblRef::get_ref),
+                acceptParentDomainCookies: config.accept_parent_domain_cookies,
+                //-- Advance TLS Settings:
                 trustedRootCertificates: config
                     .trusted_root_certificates
                     .as_ref()
                     .map_or(slice::NULL_SLICE, |c| slice::from_bytes(c).get_ref()),
-                channels: config.channels.get_ref(),
-                documentIDs: config.document_ids.get_ref(),
-                pushFilter: context
-                    .push_filter
-                    .as_ref()
-                    .and(Some(c_replication_push_filter)),
-                pullFilter: context
-                    .pull_filter
-                    .as_ref()
-                    .and(Some(c_replication_pull_filter)),
-                conflictResolver: context
-                    .conflict_resolver
-                    .as_ref()
-                    .and(Some(c_replication_conflict_resolver)),
                 #[cfg(feature = "enterprise")]
-                propertyEncryptor: context
-                    .default_collection_property_encryptor
-                    .as_ref()
-                    .and(Some(c_default_collection_property_encryptor)),
-                #[cfg(feature = "enterprise")]
-                propertyDecryptor: context
-                    .default_collection_property_decryptor
-                    .as_ref()
-                    .and(Some(c_default_collection_property_decryptor)),
+                acceptOnlySelfSignedServerCertificate: config.accept_only_self_signed_server_certificate,
+                //-- Property Encryption
                 #[cfg(feature = "enterprise")]
                 documentPropertyEncryptor: context
                     .collection_property_encryptor
@@ -852,17 +857,6 @@ impl Replicator {
                     .collection_property_decryptor
                     .as_ref()
                     .and(Some(c_collection_property_decryptor)),
-                collections: if let Some(collections) = collections.as_mut() {
-                    collections.as_mut_ptr()
-                } else {
-                    ptr::null_mut()
-                },
-                collectionCount: collections.as_ref().map(|c| c.len()).unwrap_or_default(),
-                acceptParentDomainCookies: config.accept_parent_domain_cookies,
-                #[cfg(feature = "enterprise")]
-                acceptOnlySelfSignedServerCertificate: config
-                    .accept_only_self_signed_server_certificate,
-                context: std::ptr::addr_of!(*context) as *mut _,
             };
 
             let mut error = CBLError::default();
@@ -945,34 +939,18 @@ impl Replicator {
         unsafe { CBLReplicator_Status(self.get_ref()).into() }
     }
 
-    /** Indicates which documents have local changes that have not yet been pushed to the server
-    by this replicator. This is of course a snapshot, that will go out of date as the replicator
-    makes progress and/or documents are saved locally. */
-    #[deprecated(note = "please use `pending_document_ids_2` instead")]
-    pub fn pending_document_ids(&self) -> Result<HashSet<String>> {
+    /** Indicates which documents in the given collection have local changes that have not yet been
+    pushed to the server by this replicator. This is of course a snapshot, that will go out of date
+    as the replicator makes progress and/or documents are saved locally.
+    
+    The result is, effectively, a set of document IDs: a dictionary whose keys are the IDs and
+    values are `true`.
+    If there are no pending documents, the dictionary is empty.
+    @warning If the given collection is not part of the replication, an error will be returned. */
+    pub fn pending_document_ids(&self, collection: Collection) -> Result<HashSet<String>> {
         unsafe {
             let mut error = CBLError::default();
-            let docs: FLDict =
-                CBLReplicator_PendingDocumentIDs(self.get_ref(), std::ptr::addr_of_mut!(error));
-
-            check_error(&error).and_then(|()| {
-                if docs.is_null() {
-                    return Err(Error::default());
-                }
-
-                let dict = Dict::wrap(docs, self);
-                Ok(dict.to_keys_hash_set())
-            })
-        }
-    }
-
-    /** Indicates which documents have local changes that have not yet been pushed to the server
-    by this replicator. This is of course a snapshot, that will go out of date as the replicator
-    makes progress and/or documents are saved locally. */
-    pub fn pending_document_ids_2(&self, collection: Collection) -> Result<HashSet<String>> {
-        unsafe {
-            let mut error = CBLError::default();
-            let docs: FLDict = CBLReplicator_PendingDocumentIDs2(
+            let docs: FLDict = CBLReplicator_PendingDocumentIDs(
                 self.get_ref(),
                 collection.get_ref(),
                 std::ptr::addr_of_mut!(error),
@@ -989,17 +967,19 @@ impl Replicator {
         }
     }
 
-    /** Indicates whether the document with the given ID has local changes that have not yet been
-    pushed to the server by this replicator.
-
+    /** Indicates whether the document with the given ID in the given collection has local changes
+    that have not yet been pushed to the server by this replicator.
+ 
     This is equivalent to, but faster than, calling \ref pending_document_ids and
-    checking whether the result contains \p docID. See that function's documentation for details. */
-    pub fn is_document_pending(&self, doc_id: &str) -> Result<bool> {
+    checking whether the result contains \p doc_id. See that function's documentation for details.
+    @warning  If the given collection is not part of the replication, a NULL with an error will be returned. */
+    pub fn is_document_pending(&self, collection: Collection, doc_id: &str) -> Result<bool> {
         unsafe {
             let mut error = CBLError::default();
             let result = CBLReplicator_IsDocumentPending(
                 self.get_ref(),
                 from_str(doc_id).get_ref(),
+                collection.get_ref(),
                 std::ptr::addr_of_mut!(error),
             );
             check_error(&error).map(|_| result)
@@ -1010,7 +990,7 @@ impl Replicator {
     pushed to the server by this replicator.
     This is equivalent to, but faster than, calling \ref pending_document_ids and
     checking whether the result contains \p docID. See that function's documentation for details. */
-    pub fn is_document_pending_2(&self, collection: Collection, doc_id: &str) -> Result<bool> {
+    /*pub fn is_document_pending_2(&self, collection: Collection, doc_id: &str) -> Result<bool> {
         unsafe {
             let mut error = CBLError::default();
             let result = CBLReplicator_IsDocumentPending2(
@@ -1021,7 +1001,7 @@ impl Replicator {
             );
             check_error(&error).map(|_| result)
         }
-    }
+    }*/
 
     /**
      Adds a listener that will be called when the replicator's status changes.
