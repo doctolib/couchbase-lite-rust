@@ -29,21 +29,22 @@ use crate::{
     CblRef, Dict, Document, Error, ListenerToken, MutableDict, Result, check_error, release,
     slice::{from_str, self},
     c_api::{
-        CBLListener_Remove, CBLAuth_CreatePassword, CBLAuth_CreateSession, CBLAuthenticator,
-        CBLDocument, CBLDocumentFlags, CBLEndpoint, CBLEndpoint_CreateWithURL, CBLError,
-        CBLProxySettings, CBLProxyType, CBLReplicatedDocument, CBLReplicator,
-        CBLReplicatorConfiguration, CBLReplicatorStatus, CBLReplicatorType,
-        CBLReplicator_AddChangeListener, CBLReplicator_AddDocumentReplicationListener,
-        CBLReplicator_Create, CBLReplicator_IsDocumentPending, CBLReplicator_PendingDocumentIDs,
+        CBLAuth_CreatePassword, CBLAuth_CreateSession, CBLAuthenticator,
+        CBLCollectionConfiguration, CBLDocument, CBLDocumentFlags, CBLEndpoint,
+        CBLEndpoint_CreateWithURL, CBLError, CBLListener_Remove, CBLProxySettings, CBLProxyType,
+        CBLReplicatedDocument, CBLReplicator, CBLReplicatorConfiguration, CBLReplicatorStatus,
+        CBLReplicatorType, CBLReplicator_AddChangeListener,
+        CBLReplicator_AddDocumentReplicationListener, CBLReplicator_Create,
+        CBLReplicator_IsDocumentPending, CBLReplicator_PendingDocumentIDs,
         CBLReplicator_SetHostReachable, CBLReplicator_SetSuspended, CBLReplicator_Start,
-        CBLReplicator_Status, CBLReplicator_Stop, FLDict, FLString, kCBLDocumentFlagsAccessRemoved,
-        kCBLDocumentFlagsDeleted, kCBLProxyHTTP, kCBLProxyHTTPS, kCBLReplicatorBusy,
-        kCBLReplicatorConnecting, kCBLReplicatorIdle, kCBLReplicatorOffline, kCBLReplicatorStopped,
-        kCBLReplicatorTypePull, kCBLReplicatorTypePush, kCBLReplicatorTypePushAndPull,
-        CBLReplicationCollection, kCBLDefaultReplicatorAcceptParentCookies,
-        kCBLDefaultReplicatorContinuous, kCBLDefaultReplicatorDisableAutoPurge,
-        kCBLDefaultReplicatorHeartbeat, kCBLDefaultReplicatorMaxAttemptsSingleShot,
-        kCBLDefaultReplicatorMaxAttemptsWaitTime, kCBLDefaultReplicatorType,
+        CBLReplicator_Status, CBLReplicator_Stop, FLDict, FLString,
+        kCBLDefaultReplicatorAcceptParentCookies, kCBLDefaultReplicatorContinuous,
+        kCBLDefaultReplicatorDisableAutoPurge, kCBLDefaultReplicatorHeartbeat,
+        kCBLDefaultReplicatorMaxAttemptsSingleShot, kCBLDefaultReplicatorMaxAttemptsWaitTime,
+        kCBLDefaultReplicatorType, kCBLDocumentFlagsAccessRemoved, kCBLDocumentFlagsDeleted,
+        kCBLProxyHTTP, kCBLProxyHTTPS, kCBLReplicatorBusy, kCBLReplicatorConnecting,
+        kCBLReplicatorIdle, kCBLReplicatorOffline, kCBLReplicatorStopped, kCBLReplicatorTypePull,
+        kCBLReplicatorTypePush, kCBLReplicatorTypePushAndPull,
     },
     MutableArray, Listener,
     collection::Collection,
@@ -582,15 +583,15 @@ impl ReplicationCollection {
         (self.collection.scope().name(), self.collection.name())
     }
 
-    /// Builds the C-side `CBLReplicationCollection`. Function pointers are set based on
+    /// Builds the C-side `CBLCollectionConfiguration`. Function pointers are set based on
     /// what the context contains for this collection's key, so the C callback is only
     /// installed for collections that actually have a closure registered.
-    fn to_cbl_replication_collection(
+    fn to_cbl_collection_configuration(
         &self,
         context: &ReplicationConfigurationContext,
-    ) -> CBLReplicationCollection {
+    ) -> CBLCollectionConfiguration {
         let key = self.key();
-        CBLReplicationCollection {
+        CBLCollectionConfiguration {
             collection: self.collection.get_ref(),
             conflictResolver: context
                 .conflict_resolvers
@@ -786,10 +787,10 @@ impl Replicator {
             }
 
             let headers = MutableDict::from_hashmap(&config.headers);
-            let mut collections: Vec<CBLReplicationCollection> = config
+            let mut collections: Vec<CBLCollectionConfiguration> = config
                 .collections
                 .iter()
-                .map(|c| c.to_cbl_replication_collection(&context))
+                .map(|c| c.to_cbl_collection_configuration(&context))
                 .collect();
 
             let cbl_config = CBLReplicatorConfiguration {
