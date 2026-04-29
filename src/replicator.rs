@@ -40,7 +40,10 @@ use crate::{
         kCBLDocumentFlagsDeleted, kCBLProxyHTTP, kCBLProxyHTTPS, kCBLReplicatorBusy,
         kCBLReplicatorConnecting, kCBLReplicatorIdle, kCBLReplicatorOffline, kCBLReplicatorStopped,
         kCBLReplicatorTypePull, kCBLReplicatorTypePush, kCBLReplicatorTypePushAndPull,
-        CBLReplicationCollection,
+        CBLReplicationCollection, kCBLDefaultReplicatorAcceptParentCookies,
+        kCBLDefaultReplicatorContinuous, kCBLDefaultReplicatorDisableAutoPurge,
+        kCBLDefaultReplicatorHeartbeat, kCBLDefaultReplicatorMaxAttemptsSingleShot,
+        kCBLDefaultReplicatorMaxAttemptsWaitTime, kCBLDefaultReplicatorType,
     },
     MutableArray, Listener,
     collection::Collection,
@@ -559,6 +562,20 @@ pub struct ReplicationCollection {
 }
 
 impl ReplicationCollection {
+    /// Creates a `ReplicationCollection` with no per-collection callbacks, no channel
+    /// filter, and no document-id filter. Override fields via struct-update syntax:
+    /// `ReplicationCollection { push_filter: Some(..), ..ReplicationCollection::new(c) }`.
+    pub fn new(collection: Collection) -> Self {
+        Self {
+            collection,
+            conflict_resolver: None,
+            push_filter: None,
+            pull_filter: None,
+            channels: MutableArray::default(),
+            document_ids: MutableArray::default(),
+        }
+    }
+
     /// Returns the `(scope_name, collection_name)` key used to look up this collection's
     /// callbacks in [`ReplicationConfigurationContext`].
     fn key(&self) -> CollectionKey {
@@ -668,6 +685,49 @@ pub struct ReplicatorConfiguration {
     /// Callback invoked for every encrypted property in documents being pulled.
     #[cfg(feature = "enterprise")]
     pub collection_property_decryptor: Option<CollectionPropertyDecryptor>,
+}
+
+impl ReplicatorConfiguration {
+    /// Creates a configuration with the required `endpoint` and `collections`, and every
+    /// other field set to the CBL-defined default (the `kCBLDefaultReplicator*` constants
+    /// from `CBLReplicator.h`). Override any field via struct-update syntax:
+    ///
+    /// ```ignore
+    /// ReplicatorConfiguration {
+    ///     continuous: true,
+    ///     heartbeat: 60,
+    ///     ..ReplicatorConfiguration::new(endpoint, collections)
+    /// }
+    /// ```
+    pub fn new(endpoint: Endpoint, collections: Vec<ReplicationCollection>) -> Self {
+        // Reading these `pub static` items requires `unsafe` because they are
+        // declared inside `unsafe extern "C"` in the bindgen output. They are
+        // link-time constants and reading them is sound.
+        unsafe {
+            Self {
+                collections,
+                endpoint,
+                replicator_type: ReplicatorType::from(kCBLDefaultReplicatorType),
+                continuous: kCBLDefaultReplicatorContinuous,
+                authenticator: None,
+                pinned_server_certificate: None,
+                disable_auto_purge: kCBLDefaultReplicatorDisableAutoPurge,
+                max_attempts: kCBLDefaultReplicatorMaxAttemptsSingleShot,
+                max_attempt_wait_time: kCBLDefaultReplicatorMaxAttemptsWaitTime,
+                heartbeat: kCBLDefaultReplicatorHeartbeat,
+                headers: HashMap::new(),
+                proxy: None,
+                accept_parent_domain_cookies: kCBLDefaultReplicatorAcceptParentCookies,
+                trusted_root_certificates: None,
+                #[cfg(feature = "enterprise")]
+                accept_only_self_signed_server_certificate: false,
+                #[cfg(feature = "enterprise")]
+                collection_property_encryptor: None,
+                #[cfg(feature = "enterprise")]
+                collection_property_decryptor: None,
+            }
+        }
+    }
 }
 
 //======== LIFECYCLE

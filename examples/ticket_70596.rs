@@ -82,40 +82,22 @@ fn change_channel(db: &mut Database, id: &str, channel: &str) {
 }
 
 fn setup_replicator(db: Database, session_token: String) -> Replicator {
-    let collection = ReplicationCollection {
-        collection: db.default_collection_or_error().unwrap(),
-        conflict_resolver: None,
-        push_filter: None,
-        pull_filter: None,
-        channels: MutableArray::default(),
-        document_ids: MutableArray::default(),
-    };
+    let collection = ReplicationCollection::new(db.default_collection_or_error().unwrap());
     let repl_conf = ReplicatorConfiguration {
-        collections: vec![collection],
-        endpoint: Endpoint::new_with_url(SYNC_GW_URL).unwrap(),
-        replicator_type: ReplicatorType::PushAndPull,
         continuous: true,
-        disable_auto_purge: false,
         max_attempts: 3,
         max_attempt_wait_time: 1,
         heartbeat: 60,
-        authenticator: None,
-        proxy: None,
         headers: vec![(
             "Cookie".to_string(),
             format!("SyncGatewaySession={session_token}"),
         )]
         .into_iter()
         .collect(),
-        pinned_server_certificate: None,
-        trusted_root_certificates: None,
-        accept_parent_domain_cookies: false,
-        #[cfg(feature = "enterprise")]
-        accept_only_self_signed_server_certificate: false,
-        #[cfg(feature = "enterprise")]
-        collection_property_encryptor: None,
-        #[cfg(feature = "enterprise")]
-        collection_property_decryptor: None,
+        ..ReplicatorConfiguration::new(
+            Endpoint::new_with_url(SYNC_GW_URL).unwrap(),
+            vec![collection],
+        )
     };
     Replicator::new(repl_conf).unwrap()
 }

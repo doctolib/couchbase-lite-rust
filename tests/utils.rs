@@ -8,8 +8,6 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
     thread, time,
 };
-#[cfg(feature = "enterprise")]
-use std::collections::HashMap;
 use couchbase_lite::{collection::Collection, logging::CustomLogSink};
 
 pub const DB_NAME: &str = "test_db";
@@ -172,34 +170,28 @@ fn generate_replication_configuration(
     callbacks: ReplicationTestCallbacks,
 ) -> ReplicatorConfiguration {
     let collection = ReplicationCollection {
-        collection: local_db
-            .default_collection_or_error()
-            .expect("default collection"),
+        document_ids: config.document_ids,
         conflict_resolver: callbacks.conflict_resolver,
         push_filter: callbacks.push_filter,
         pull_filter: callbacks.pull_filter,
-        channels: MutableArray::default(),
-        document_ids: config.document_ids,
+        ..ReplicationCollection::new(
+            local_db
+                .default_collection_or_error()
+                .expect("default collection"),
+        )
     };
 
     ReplicatorConfiguration {
-        collections: vec![collection],
-        endpoint: Endpoint::new_with_local_db(central_db),
         replicator_type: config.replicator_type,
         continuous: config.continuous,
-        authenticator: None,
-        pinned_server_certificate: None,
+        // Tests use shorter retry/heartbeat than the CBL defaults to keep failures snappy.
         disable_auto_purge: true,
         max_attempts: 4,
         max_attempt_wait_time: 100,
         heartbeat: 120,
-        headers: HashMap::new(),
-        proxy: None,
-        accept_parent_domain_cookies: false,
-        trusted_root_certificates: None,
-        accept_only_self_signed_server_certificate: false,
         collection_property_encryptor: callbacks.collection_property_encryptor,
         collection_property_decryptor: callbacks.collection_property_decryptor,
+        ..ReplicatorConfiguration::new(Endpoint::new_with_local_db(central_db), vec![collection])
     }
 }
 
