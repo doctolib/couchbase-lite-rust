@@ -52,7 +52,10 @@ fn create_doc(db: &mut Database, id: &str, channel: &str) {
         .to_string(),
     )
     .unwrap();
-    db.save_document(&mut doc).unwrap();
+    db.default_collection_or_error()
+        .unwrap()
+        .save_document(&mut doc)
+        .unwrap();
 
     println!(
         "Created doc {id} with content: {}",
@@ -61,14 +64,17 @@ fn create_doc(db: &mut Database, id: &str, channel: &str) {
 }
 
 fn get_doc(db: &Database, id: &str) -> Result<Document> {
-    db.get_document(id)
+    db.default_collection_or_error()?.get_document(id)
 }
 
 fn change_channel(db: &mut Database, id: &str, channel: &str) {
     let mut doc = get_doc(db, id).unwrap();
     let mut prop = doc.mutable_properties();
     prop.at("channels").put_string(channel);
-    let _ = db.save_document(&mut doc);
+    let _ = db
+        .default_collection_or_error()
+        .unwrap()
+        .save_document(&mut doc);
     println!(
         "Changed doc {id} with content: {}",
         doc.properties_as_json()
@@ -76,8 +82,16 @@ fn change_channel(db: &mut Database, id: &str, channel: &str) {
 }
 
 fn setup_replicator(db: Database, session_token: String) -> Replicator {
+    let collection = ReplicationCollection {
+        collection: db.default_collection_or_error().unwrap(),
+        conflict_resolver: None,
+        push_filter: None,
+        pull_filter: None,
+        channels: MutableArray::default(),
+        document_ids: MutableArray::default(),
+    };
     let repl_conf = ReplicatorConfiguration {
-        database: Some(db.clone()),
+        collections: vec![collection],
         endpoint: Endpoint::new_with_url(SYNC_GW_URL).unwrap(),
         replicator_type: ReplicatorType::PushAndPull,
         continuous: true,
@@ -95,15 +109,15 @@ fn setup_replicator(db: Database, session_token: String) -> Replicator {
         .collect(),
         pinned_server_certificate: None,
         trusted_root_certificates: None,
-        channels: MutableArray::default(),
-        document_ids: MutableArray::default(),
-        collections: None,
         accept_parent_domain_cookies: false,
         #[cfg(feature = "enterprise")]
         accept_only_self_signed_server_certificate: false,
+        #[cfg(feature = "enterprise")]
+        collection_property_encryptor: None,
+        #[cfg(feature = "enterprise")]
+        collection_property_decryptor: None,
     };
-    let repl_context = ReplicationConfigurationContext::default();
-    Replicator::new(repl_conf, Box::new(repl_context)).unwrap()
+    Replicator::new(repl_conf).unwrap()
 }
 
 fn doc_listener(direction: Direction, documents: Vec<ReplicatedDocument>) {

@@ -150,32 +150,56 @@ impl Default for ReplicationTestConfiguration {
     }
 }
 
+/// Test-side mirror of the per-collection callbacks the lib used to expose via
+/// `ReplicationConfigurationContext`. Tests build one of these and the helpers attach
+/// the closures to the default `ReplicationCollection` (filters/resolver) and to the
+/// replicator config (encryptor/decryptor).
+#[cfg(feature = "enterprise")]
+#[derive(Default)]
+pub struct ReplicationTestCallbacks {
+    pub push_filter: Option<ReplicationFilter>,
+    pub pull_filter: Option<ReplicationFilter>,
+    pub conflict_resolver: Option<ConflictResolver>,
+    pub collection_property_encryptor: Option<CollectionPropertyEncryptor>,
+    pub collection_property_decryptor: Option<CollectionPropertyDecryptor>,
+}
+
 #[cfg(feature = "enterprise")]
 fn generate_replication_configuration(
     local_db: &Database,
     central_db: &Database,
     config: ReplicationTestConfiguration,
+    callbacks: ReplicationTestCallbacks,
 ) -> ReplicatorConfiguration {
+    let collection = ReplicationCollection {
+        collection: local_db
+            .default_collection_or_error()
+            .expect("default collection"),
+        conflict_resolver: callbacks.conflict_resolver,
+        push_filter: callbacks.push_filter,
+        pull_filter: callbacks.pull_filter,
+        channels: MutableArray::default(),
+        document_ids: config.document_ids,
+    };
+
     ReplicatorConfiguration {
-        database: Some(local_db.clone()),
+        collections: vec![collection],
         endpoint: Endpoint::new_with_local_db(central_db),
         replicator_type: config.replicator_type,
         continuous: config.continuous,
+        authenticator: None,
+        pinned_server_certificate: None,
         disable_auto_purge: true,
         max_attempts: 4,
         max_attempt_wait_time: 100,
         heartbeat: 120,
-        authenticator: None,
-        proxy: None,
         headers: HashMap::new(),
-        pinned_server_certificate: None,
-        trusted_root_certificates: None,
-        channels: MutableArray::default(),
-        document_ids: config.document_ids,
-        collections: None,
+        proxy: None,
         accept_parent_domain_cookies: false,
-        #[cfg(feature = "enterprise")]
+        trusted_root_certificates: None,
         accept_only_self_signed_server_certificate: false,
+        collection_property_encryptor: callbacks.collection_property_encryptor,
+        collection_property_decryptor: callbacks.collection_property_decryptor,
     }
 }
 
@@ -194,7 +218,7 @@ pub struct ReplicationTwoDbsTester {
 impl ReplicationTwoDbsTester {
     pub fn new(
         replication_configuration: ReplicationTestConfiguration,
-        context: Box<ReplicationConfigurationContext>,
+        callbacks: ReplicationTestCallbacks,
     ) -> Self {
         let _leak_checker = LeakChecker::new();
 
@@ -226,8 +250,9 @@ impl ReplicationTwoDbsTester {
             &local_database,
             &central_database,
             replication_configuration,
+            callbacks,
         );
-        let mut replicator = Replicator::new(replication_configuration, context).unwrap();
+        let mut replicator = Replicator::new(replication_configuration).unwrap();
 
         // Start replicator if needed
         if replicator_continuous {
@@ -269,7 +294,7 @@ impl ReplicationTwoDbsTester {
     fn new_replicator(
         &mut self,
         new_configuration: ReplicationTestConfiguration,
-        new_context: Box<ReplicationConfigurationContext>,
+        new_callbacks: ReplicationTestCallbacks,
     ) -> Replicator {
         let replicator_continuous = new_configuration.continuous;
 
@@ -277,8 +302,9 @@ impl ReplicationTwoDbsTester {
             &self.local_database,
             &self.central_database,
             new_configuration,
+            new_callbacks,
         );
-        let mut new_replicator = Replicator::new(new_configuration, new_context).unwrap();
+        let mut new_replicator = Replicator::new(new_configuration).unwrap();
 
         if replicator_continuous {
             new_replicator.start(false);
@@ -289,11 +315,11 @@ impl ReplicationTwoDbsTester {
     pub fn change_replicator(
         &mut self,
         new_configuration: ReplicationTestConfiguration,
-        new_context: Box<ReplicationConfigurationContext>,
+        new_callbacks: ReplicationTestCallbacks,
     ) {
         self.stop_replicator();
         self.replicator_continuous = new_configuration.continuous;
-        self.replicator = self.new_replicator(new_configuration, new_context);
+        self.replicator = self.new_replicator(new_configuration, new_callbacks);
     }
 }
 
@@ -326,8 +352,8 @@ impl ReplicationThreeDbsTester {
     pub fn new(
         replication_configuration_1: ReplicationTestConfiguration,
         replication_configuration_2: ReplicationTestConfiguration,
-        context_1: Box<ReplicationConfigurationContext>,
-        context_2: Box<ReplicationConfigurationContext>,
+        callbacks_1: ReplicationTestCallbacks,
+        callbacks_2: ReplicationTestCallbacks,
     ) -> Self {
         let _leak_checker = LeakChecker::new();
 
@@ -366,15 +392,17 @@ impl ReplicationThreeDbsTester {
             &local_database_1,
             &central_database,
             replication_configuration_1,
+            callbacks_1,
         );
-        let mut replicator_1 = Replicator::new(replication_configuration_1, context_1).unwrap();
+        let mut replicator_1 = Replicator::new(replication_configuration_1).unwrap();
 
         let replication_configuration_2 = generate_replication_configuration(
             &local_database_2,
             &central_database,
             replication_configuration_2,
+            callbacks_2,
         );
-        let mut replicator_2 = Replicator::new(replication_configuration_2, context_2).unwrap();
+        let mut replicator_2 = Replicator::new(replication_configuration_2).unwrap();
 
         // Start replicators if needed
         if replicator_1_continuous {
@@ -441,7 +469,7 @@ impl ReplicationThreeDbsTester {
         &mut self,
         local_database: Database,
         new_configuration: ReplicationTestConfiguration,
-        new_context: Box<ReplicationConfigurationContext>,
+        new_callbacks: ReplicationTestCallbacks,
     ) -> Replicator {
         let replicator_continuous = new_configuration.continuous;
 
@@ -449,8 +477,9 @@ impl ReplicationThreeDbsTester {
             &local_database,
             &self.central_database,
             new_configuration,
+            new_callbacks,
         );
-        let mut new_replicator = Replicator::new(new_configuration, new_context).unwrap();
+        let mut new_replicator = Replicator::new(new_configuration).unwrap();
 
         if replicator_continuous {
             new_replicator.start(false);
@@ -461,27 +490,27 @@ impl ReplicationThreeDbsTester {
     pub fn change_replicator_1(
         &mut self,
         new_configuration: ReplicationTestConfiguration,
-        new_context: Box<ReplicationConfigurationContext>,
+        new_callbacks: ReplicationTestCallbacks,
     ) {
         self.stop_replicator_1();
         self.replicator_1_continuous = new_configuration.continuous;
         self.replicator_1 = self.new_replicator(
             self.local_database_1.clone(),
             new_configuration,
-            new_context,
+            new_callbacks,
         );
     }
     pub fn change_replicator_2(
         &mut self,
         new_configuration: ReplicationTestConfiguration,
-        new_context: Box<ReplicationConfigurationContext>,
+        new_callbacks: ReplicationTestCallbacks,
     ) {
         self.stop_replicator_2();
         self.replicator_2_continuous = new_configuration.continuous;
         self.replicator_2 = self.new_replicator(
             self.local_database_2.clone(),
             new_configuration,
-            new_context,
+            new_callbacks,
         );
     }
 }
