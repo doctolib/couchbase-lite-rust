@@ -1,10 +1,10 @@
 use crate::{
-    CblRef, Database,
+    CblRef,
     c_api::{
-        CBLValueIndexConfiguration, CBLError,
-        CBLCollection_CreateValueIndex, CBLCollection_DeleteIndex,
-        CBLCollection_GetIndexNames, CBLCollection_CreateArrayIndex, CBLArrayIndexConfiguration,
-        CBLQueryIndex, CBLQueryIndex_Name, CBLQueryIndex_Collection, CBLCollection_GetIndex,
+        CBLValueIndexConfiguration, CBLError, CBLCollection_CreateValueIndex,
+        CBLCollection_DeleteIndex, CBLCollection_GetIndexNames, CBLCollection_CreateArrayIndex,
+        CBLArrayIndexConfiguration, CBLQueryIndex, CBLQueryIndex_Name, CBLQueryIndex_Collection,
+        CBLCollection_GetIndex,
     },
     error::{Error, Result, failure},
     slice::{from_str, from_c_str, Slice},

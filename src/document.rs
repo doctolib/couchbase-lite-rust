@@ -19,21 +19,21 @@ use std::time::{Duration, SystemTime};
 
 use crate::{
     c_api::{
-        CBLDocument, CBLDocument_Create, CBLDocument_CreateJSON, CBLDocument_CreateWithID,
-        CBLDocument_ID, CBLDocument_MutableProperties, CBLDocument_Properties,
-        CBLDocument_RevisionID, CBLDocument_Sequence, CBLDocument_SetJSON,
-        CBLDocument_SetProperties, CBLDocument_Timestamp, CBLError, kCBLConcurrencyControlFailOnConflict,
-        kCBLConcurrencyControlLastWriteWins, CBLDocumentChange, CBLCollection,
-        CBLCollection_GetMutableDocument, CBLCollection_SaveDocument,
-        CBLCollection_SaveDocumentWithConcurrencyControl,
+        CBLDocument, CBLDocument_Collection, CBLDocument_Create, CBLDocument_CreateJSON,
+        CBLDocument_CreateWithID, CBLDocument_ID, CBLDocument_MutableProperties,
+        CBLDocument_Properties, CBLDocument_RevisionID, CBLDocument_Sequence, CBLDocument_SetJSON,
+        CBLDocument_SetProperties, CBLDocument_Timestamp, CBLError,
+        kCBLConcurrencyControlFailOnConflict, kCBLConcurrencyControlLastWriteWins,
+        CBLDocumentChange, CBLCollection, CBLCollection_GetMutableDocument,
+        CBLCollection_SaveDocument, CBLCollection_SaveDocumentWithConcurrencyControl,
         CBLCollection_SaveDocumentWithConflictHandler, CBLCollection_DeleteDocument,
         CBLCollection_DeleteDocumentWithConcurrencyControl, CBLCollection_PurgeDocument,
         CBLCollection_PurgeDocumentByID, CBLCollection_GetDocumentExpiration,
         CBLCollection_SetDocumentExpiration, CBLCollection_AddDocumentChangeListener,
     },
     slice::from_str,
-    CblRef, CouchbaseLiteError, Dict, Error, ListenerToken, MutableDict, Result,
-    Timestamp, check_bool, check_failure, failure, release, retain, Listener,
+    CblRef, CouchbaseLiteError, Dict, Error, ListenerToken, MutableDict, Result, Timestamp,
+    check_bool, check_failure, failure, release, retain, Listener,
     collection::Collection,
 };
 
@@ -335,6 +335,18 @@ impl Document {
     /// If the document has not been saved yet, this method returns None.
     pub fn revision_id(&self) -> Option<&str> {
         unsafe { CBLDocument_RevisionID(self.get_ref()).as_str() }
+    }
+
+    /// Returns the collection this document belongs to, or `None` for a document that has
+    /// not yet been saved (e.g. one created via [`Document::new`] or
+    /// [`Document::new_with_id`]).
+    pub fn collection(&self) -> Option<Collection> {
+        let ptr = unsafe { CBLDocument_Collection(self.get_ref()) };
+        if ptr.is_null() {
+            None
+        } else {
+            Some(Collection::reference(ptr))
+        }
     }
 
     /// The hybrid logical timestamp in nanoseconds since epoch that the revision was created. */

@@ -16,15 +16,14 @@
 //
 
 use crate::{
-    CblRef, ListenerToken, release, retain,
+    CblRef, release, retain,
     slice::from_str,
     error::{Result, check_bool, failure},
     c_api::{
         CBLDatabase, CBLDatabaseConfiguration, CBLDatabaseConfiguration_Default,
-        CBLDatabase_BeginTransaction,
-        CBLDatabase_BufferNotifications, CBLDatabase_Close, CBLDatabase_Delete,
-        CBLDatabase_EndTransaction, CBLDatabase_Name, CBLDatabase_Open, CBLDatabase_Path,
-        CBLDatabase_PerformMaintenance, CBLDatabase_SendNotifications, CBLError,
+        CBLDatabase_BeginTransaction, CBLDatabase_BufferNotifications, CBLDatabase_Close,
+        CBLDatabase_Delete, CBLDatabase_EndTransaction, CBLDatabase_Name, CBLDatabase_Open,
+        CBLDatabase_Path, CBLDatabase_PerformMaintenance, CBLDatabase_SendNotifications, CBLError,
         CBL_DatabaseExists, CBL_DeleteDatabase, FLString, kCBLMaintenanceTypeCompact,
         kCBLMaintenanceTypeFullOptimize, kCBLMaintenanceTypeIntegrityCheck,
         kCBLMaintenanceTypeOptimize, kCBLMaintenanceTypeReindex, CBL_CopyDatabase,
@@ -32,7 +31,7 @@ use crate::{
         CBLDatabase_Collection, CBLDatabase_CreateCollection, CBLDatabase_DeleteCollection,
         CBLDatabase_DefaultScope, CBLDatabase_DefaultCollection,
     },
-    Listener, check_error, Error, CouchbaseLiteError,
+    check_error, Error, CouchbaseLiteError,
     collection::Collection,
     scope::Scope,
     MutableArray,

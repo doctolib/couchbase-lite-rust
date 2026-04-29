@@ -23,9 +23,10 @@ use std::{
     sync::mpsc::channel,
     time::Duration,
 };
+#[cfg(feature = "enterprise")]
+use crate::Database;
 use crate::{
-    CblRef, Database, Dict, Document, Error, ListenerToken, MutableDict, Result, check_error,
-    release,
+    CblRef, Dict, Document, Error, ListenerToken, MutableDict, Result, check_error, release,
     slice::{from_str, self},
     c_api::{
         CBLListener_Remove, CBLAuth_CreatePassword, CBLAuth_CreateSession, CBLAuthenticator,
@@ -53,8 +54,6 @@ use crate::{
     },
     slice::from_bytes,
 };
-
-// WARNING: THIS API IS UNIMPLEMENTED SO FAR
 
 //======== CONFIGURATION
 
@@ -215,25 +214,26 @@ impl From<ProxyType> for CBLProxyType {
 /** Proxy settings for the replicator. */
 #[derive(Debug)]
 pub struct ProxySettings {
-    pub hostname: Option<String>, // Proxy server hostname or IP address
-    pub username: Option<String>, // Username for proxy auth
-    pub password: Option<String>, // Password for proxy auth
+    /// Proxy server hostname or IP address. Mandatory
+    pub hostname: String,
+    /// Username for proxy auth (optional, per CBLReplicator.h).
+    pub username: Option<String>,
+    /// Password for proxy auth (only meaningful when `username` is set).
+    pub password: Option<String>,
     cbl: CBLProxySettings,
 }
 
 impl ProxySettings {
     pub fn new(
         proxy_type: ProxyType,
-        hostname: Option<String>,
+        hostname: String,
         port: u16,
         username: Option<String>,
         password: Option<String>,
     ) -> Self {
         let cbl = CBLProxySettings {
             type_: proxy_type.into(),
-            hostname: hostname
-                .as_ref()
-                .map_or(slice::NULL_SLICE, |s| from_str(s).get_ref()),
+            hostname: from_str(&hostname).get_ref(),
             port,
             username: username
                 .as_ref()
@@ -259,24 +259,39 @@ impl CblRef for ProxySettings {
     }
 }
 
+//======== CALLBACKS
+
+/// Identifies a collection by `(scope_name, collection_name)`, used to look up the
+/// per-collection filter or conflict resolver from the context inside the C callback.
+type CollectionKey = (String, String);
+/// Returns the `(scope_name, collection_name)` pair for the document's collection, or
+/// `None` if the document has not been saved (which shouldn't reach a replicator callback).
+fn document_collection_key(doc: &Document) -> Option<CollectionKey> {
+    doc.collection().map(|c| (c.scope().name(), c.name()))
+}
+
 /** A callback that can decide whether a particular document should be pushed or pulled. */
 pub type ReplicationFilter = Box<dyn Fn(&Document, bool, bool) -> bool>;
 
-#[unsafe(no_mangle)]
 unsafe extern "C" fn c_replication_push_filter(
     context: *mut ::std::os::raw::c_void,
     document: *mut CBLDocument,
     flags: CBLDocumentFlags,
 ) -> bool {
-    let repl_conf_context = context as *const ReplicationConfigurationContext;
-    let document = Document::reference(document.cast::<CBLDocument>());
-    let (is_deleted, is_access_removed) = read_document_flags(flags);
-
     unsafe {
-        (*repl_conf_context)
-            .push_filter
-            .as_ref()
-            .is_some_and(|callback| callback(&document, is_deleted, is_access_removed))
+        let doc = Document::reference(document);
+        // Default behaviour matches CBL's "no filter installed": replicate the document.
+        // Reached only if key derivation or the per-collection lookup unexpectedly misses.
+        let Some(key) = document_collection_key(&doc) else {
+            return true;
+        };
+        let repl_conf_context = &*(context as *const ReplicationConfigurationContext);
+        let (is_deleted, is_access_removed) = read_document_flags(flags);
+
+        repl_conf_context
+            .push_filters
+            .get(&key)
+            .is_none_or(|callback| callback(&doc, is_deleted, is_access_removed))
     }
 }
 unsafe extern "C" fn c_replication_pull_filter(
@@ -284,15 +299,18 @@ unsafe extern "C" fn c_replication_pull_filter(
     document: *mut CBLDocument,
     flags: CBLDocumentFlags,
 ) -> bool {
-    let repl_conf_context = context as *const ReplicationConfigurationContext;
-    let document = Document::reference(document.cast::<CBLDocument>());
-    let (is_deleted, is_access_removed) = read_document_flags(flags);
-
     unsafe {
-        (*repl_conf_context)
-            .pull_filter
-            .as_ref()
-            .is_some_and(|callback| callback(&document, is_deleted, is_access_removed))
+        let doc = Document::reference(document);
+        let Some(key) = document_collection_key(&doc) else {
+            return true;
+        };
+        let repl_conf_context = &*(context as *const ReplicationConfigurationContext);
+        let (is_deleted, is_access_removed) = read_document_flags(flags);
+
+        repl_conf_context
+            .pull_filters
+            .get(&key)
+            .is_none_or(|callback| callback(&doc, is_deleted, is_access_removed))
     }
 }
 fn read_document_flags(flags: CBLDocumentFlags) -> (bool, bool) {
@@ -312,10 +330,17 @@ unsafe extern "C" fn c_replication_conflict_resolver(
     local_document: *const CBLDocument,
     remote_document: *const CBLDocument,
 ) -> *const CBLDocument {
-    let repl_conf_context = context as *const ReplicationConfigurationContext;
+    // Fallback used when the per-collection resolver lookup unexpectedly misses or the
+    // doc has no collection. Mirrors `CBLDefaultConflictResolver`: local wins, falling
+    // back to remote if local is absent. Returning null would *delete* the document
+    // (CBLReplicator.h:136) so it is not a safe default.
+    let default_resolution = if !local_document.is_null() {
+        local_document
+    } else {
+        remote_document
+    };
 
     unsafe {
-        let doc_id = document_id.to_string().unwrap_or_default();
         let local_document = if local_document.is_null() {
             None
         } else {
@@ -327,10 +352,17 @@ unsafe extern "C" fn c_replication_conflict_resolver(
             Some(Document::reference(remote_document as *mut CBLDocument))
         };
 
-        (*repl_conf_context)
-            .conflict_resolver
-            .as_ref()
-            .map_or(ptr::null(), |callback| {
+        let key_doc = local_document.as_ref().or(remote_document.as_ref());
+        let Some(key) = key_doc.and_then(document_collection_key) else {
+            return default_resolution;
+        };
+        let repl_conf_context = &*(context as *const ReplicationConfigurationContext);
+        let doc_id = document_id.to_string().unwrap_or_default();
+
+        repl_conf_context
+            .conflict_resolvers
+            .get(&key)
+            .map_or(default_resolution, |callback| {
                 callback(&doc_id, local_document, remote_document)
                     .map_or(ptr::null(), |d| d.get_ref() as *const CBLDocument)
             })
@@ -343,78 +375,20 @@ pub enum EncryptionError {
     Permanent, // The replicator will bypass the document and not try encrypting/decrypting the document until a new revision is created
 }
 
-/** Callback that encrypts encryptable properties in documents pushed by the replicator.
-\note   If a null result or an error is returned, the document will be failed to
-        replicate with the kCBLErrorCrypto error. For security reason, the encryption
-        cannot be skipped. */
-#[deprecated(note = "please use `CollectionPropertyEncryptor` on default collection instead")]
+/// Translates an [`EncryptionError`] returned by a user closure into the [`Error`] we
+/// report back to CBL through the `cbl_error` out-pointer. Shared by the encryptor and
+/// decryptor C callbacks.
 #[cfg(feature = "enterprise")]
-pub type DefaultCollectionPropertyEncryptor = fn(
-    document_id: Option<String>,
-    properties: Dict,
-    key_path: Option<String>,
-    input: Vec<u8>,
-    algorithm: Option<String>,
-    kid: Option<String>,
-    error: &Error,
-) -> std::result::Result<Vec<u8>, EncryptionError>;
-#[unsafe(no_mangle)]
-#[cfg(feature = "enterprise")]
-pub extern "C" fn c_default_collection_property_encryptor(
-    context: *mut ::std::os::raw::c_void,
-    document_id: FLString,
-    properties: FLDict,
-    key_path: FLString,
-    input: FLSlice,
-    algorithm: *mut FLStringResult,
-    kid: *mut FLStringResult,
-    cbl_error: *mut CBLError,
-) -> FLSliceResult {
-    unsafe {
-        let repl_conf_context = context as *const ReplicationConfigurationContext;
-        let mut error = cbl_error.as_ref().map_or(Error::default(), Error::new);
-
-        let mut result = FLSliceResult_New(0);
-        if let Some(input) = input.to_vec() {
-            result = (*repl_conf_context)
-                .default_collection_property_encryptor
-                .map(|callback| {
-                    callback(
-                        document_id.to_string(),
-                        Dict::wrap(properties, &properties),
-                        key_path.to_string(),
-                        input,
-                        algorithm.as_ref().and_then(|s| s.clone().to_string()),
-                        kid.as_ref().and_then(|s| s.clone().to_string()),
-                        &error,
-                    )
-                })
-                .map_or(FLSliceResult_New(0), |v| match v {
-                    Ok(v) => FLSlice_Copy(from_bytes(&v[..]).get_ref()),
-                    Err(err) => {
-                        match err {
-                            EncryptionError::Temporary => {
-                                error = Error {
-                                    code: ErrorCode::WebSocket(503),
-                                    internal_info: None,
-                                };
-                            }
-                            EncryptionError::Permanent => {
-                                error = Error::cbl_error(CouchbaseLiteError::Crypto);
-                            }
-                        }
-
-                        FLSliceResult::null()
-                    }
-                });
-        } else {
-            error = Error::cbl_error(CouchbaseLiteError::Crypto);
-        }
-
-        if error != Error::default() {
-            *cbl_error = error.as_cbl_error();
-        }
-        result
+fn encryption_error_to_cbl(err: EncryptionError) -> Error {
+    match err {
+        // Transient: CBL stops the replication and retries the document later.
+        // WebSocket 503 is the agreed-upon signal for "temporary, please retry".
+        EncryptionError::Temporary => Error {
+            code: ErrorCode::WebSocket(503),
+            internal_info: None,
+        },
+        // Permanent: bypass this revision until a new one is created.
+        EncryptionError::Permanent => Error::cbl_error(CouchbaseLiteError::Crypto),
     }
 }
 
@@ -434,9 +408,8 @@ pub type CollectionPropertyEncryptor = fn(
     kid: Option<String>,
     error: &Error,
 ) -> std::result::Result<Vec<u8>, EncryptionError>;
-#[unsafe(no_mangle)]
 #[cfg(feature = "enterprise")]
-pub extern "C" fn c_collection_property_encryptor(
+extern "C" fn c_collection_property_encryptor(
     context: *mut ::std::os::raw::c_void,
     scope: FLString,
     collection: FLString,
@@ -449,127 +422,39 @@ pub extern "C" fn c_collection_property_encryptor(
     cbl_error: *mut CBLError,
 ) -> FLSliceResult {
     unsafe {
-        let repl_conf_context = context as *const ReplicationConfigurationContext;
-        let mut error = cbl_error.as_ref().map_or(Error::default(), Error::new);
+        let ctx = context as *const ReplicationConfigurationContext;
 
-        let mut result = FLSliceResult_New(0);
-        if let Some(input) = input.to_vec() {
-            result = (*repl_conf_context)
-                .collection_property_encryptor
-                .map(|callback| {
-                    callback(
-                        scope.to_string(),
-                        collection.to_string(),
-                        document_id.to_string(),
-                        Dict::wrap(properties, &properties),
-                        key_path.to_string(),
-                        input,
-                        algorithm.as_ref().and_then(|s| s.clone().to_string()),
-                        kid.as_ref().and_then(|s| s.clone().to_string()),
-                        &error,
-                    )
-                })
-                .map_or(FLSliceResult_New(0), |v| match v {
-                    Ok(v) => FLSlice_Copy(from_bytes(&v[..]).get_ref()),
-                    Err(err) => {
-                        match err {
-                            EncryptionError::Temporary => {
-                                error = Error {
-                                    code: ErrorCode::WebSocket(503),
-                                    internal_info: None,
-                                };
-                            }
-                            EncryptionError::Permanent => {
-                                error = Error::cbl_error(CouchbaseLiteError::Crypto);
-                            }
-                        }
+        // No encryptor registered: leave the property untouched.
+        let Some(callback) = (*ctx).collection_property_encryptor else {
+            return FLSliceResult_New(0);
+        };
 
-                        FLSliceResult::null()
-                    }
-                });
-        } else {
-            error = Error::cbl_error(CouchbaseLiteError::Crypto);
+        // Invalid input bytes: encryption is not skippable for security reasons (see
+        // header doc), so signal a permanent crypto error.
+        let Some(plaintext) = input.to_vec() else {
+            *cbl_error = Error::cbl_error(CouchbaseLiteError::Crypto).as_cbl_error();
+            return FLSliceResult::null();
+        };
+
+        let result = callback(
+            scope.to_string(),
+            collection.to_string(),
+            document_id.to_string(),
+            Dict::wrap(properties, &properties),
+            key_path.to_string(),
+            plaintext,
+            algorithm.as_ref().and_then(|s| s.clone().to_string()),
+            kid.as_ref().and_then(|s| s.clone().to_string()),
+            &Error::default(),
+        );
+
+        match result {
+            Ok(ciphertext) => FLSlice_Copy(from_bytes(&ciphertext[..]).get_ref()),
+            Err(err) => {
+                *cbl_error = encryption_error_to_cbl(err).as_cbl_error();
+                FLSliceResult::null()
+            }
         }
-
-        if error != Error::default() {
-            *cbl_error = error.as_cbl_error();
-        }
-        result
-    }
-}
-
-/** Callback that decrypts encrypted encryptable properties in documents pulled by the replicator.
-\note   The decryption will be skipped (the encrypted data will be kept) when a null result
-        without an error is returned. If an error is returned, the document will be failed to replicate
-        with the kCBLErrorCrypto error. */
-#[deprecated(note = "please use `CollectionPropertyDecryptor` on default collection instead")]
-#[cfg(feature = "enterprise")]
-pub type DefaultCollectionPropertyDecryptor = fn(
-    document_id: Option<String>,
-    properties: Dict,
-    key_path: Option<String>,
-    input: Vec<u8>,
-    algorithm: Option<String>,
-    kid: Option<String>,
-    error: &Error,
-) -> std::result::Result<Vec<u8>, EncryptionError>;
-#[unsafe(no_mangle)]
-#[cfg(feature = "enterprise")]
-pub extern "C" fn c_default_collection_property_decryptor(
-    context: *mut ::std::os::raw::c_void,
-    document_id: FLString,
-    properties: FLDict,
-    key_path: FLString,
-    input: FLSlice,
-    algorithm: FLString,
-    kid: FLString,
-    cbl_error: *mut CBLError,
-) -> FLSliceResult {
-    unsafe {
-        let repl_conf_context = context as *const ReplicationConfigurationContext;
-        let mut error = cbl_error.as_ref().map_or(Error::default(), Error::new);
-
-        let mut result = FLSliceResult_New(0);
-        if let Some(input) = input.to_vec() {
-            result = (*repl_conf_context)
-                .default_collection_property_decryptor
-                .map(|callback| {
-                    callback(
-                        document_id.to_string(),
-                        Dict::wrap(properties, &properties),
-                        key_path.to_string(),
-                        input.to_vec(),
-                        algorithm.to_string(),
-                        kid.to_string(),
-                        &error,
-                    )
-                })
-                .map_or(FLSliceResult_New(0), |v| match v {
-                    Ok(v) => FLSlice_Copy(from_bytes(&v[..]).get_ref()),
-                    Err(err) => {
-                        match err {
-                            EncryptionError::Temporary => {
-                                error = Error {
-                                    code: ErrorCode::WebSocket(503),
-                                    internal_info: None,
-                                };
-                            }
-                            EncryptionError::Permanent => {
-                                error = Error::cbl_error(CouchbaseLiteError::Crypto);
-                            }
-                        }
-
-                        FLSliceResult::null()
-                    }
-                });
-        } else {
-            error = Error::cbl_error(CouchbaseLiteError::Crypto);
-        }
-
-        if error != Error::default() {
-            *cbl_error = error.as_cbl_error();
-        }
-        result
     }
 }
 
@@ -589,9 +474,8 @@ pub type CollectionPropertyDecryptor = fn(
     kid: Option<String>,
     error: &Error,
 ) -> std::result::Result<Vec<u8>, EncryptionError>;
-#[unsafe(no_mangle)]
 #[cfg(feature = "enterprise")]
-pub extern "C" fn c_collection_property_decryptor(
+extern "C" fn c_collection_property_decryptor(
     context: *mut ::std::os::raw::c_void,
     scope: FLString,
     collection: FLString,
@@ -604,64 +488,59 @@ pub extern "C" fn c_collection_property_decryptor(
     cbl_error: *mut CBLError,
 ) -> FLSliceResult {
     unsafe {
-        let repl_conf_context = context as *const ReplicationConfigurationContext;
-        let mut error = cbl_error.as_ref().map_or(Error::default(), Error::new);
+        let ctx = context as *const ReplicationConfigurationContext;
 
-        let mut result = FLSliceResult_New(0);
-        if let Some(input) = input.to_vec() {
-            result = (*repl_conf_context)
-                .collection_property_decryptor
-                .map(|callback| {
-                    callback(
-                        scope.to_string(),
-                        collection.to_string(),
-                        document_id.to_string(),
-                        Dict::wrap(properties, &properties),
-                        key_path.to_string(),
-                        input.to_vec(),
-                        algorithm.to_string(),
-                        kid.to_string(),
-                        &error,
-                    )
-                })
-                .map_or(FLSliceResult_New(0), |v| match v {
-                    Ok(v) => FLSlice_Copy(from_bytes(&v[..]).get_ref()),
-                    Err(err) => {
-                        match err {
-                            EncryptionError::Temporary => {
-                                error = Error {
-                                    code: ErrorCode::WebSocket(503),
-                                    internal_info: None,
-                                };
-                            }
-                            EncryptionError::Permanent => {
-                                error = Error::cbl_error(CouchbaseLiteError::Crypto);
-                            }
-                        }
+        // No decryptor registered: keep the encrypted data as-is (per header doc, an
+        // empty result with no error means "skip decryption").
+        let Some(callback) = (*ctx).collection_property_decryptor else {
+            return FLSliceResult_New(0);
+        };
 
-                        FLSliceResult::null()
-                    }
-                });
-        } else {
-            error = Error::cbl_error(CouchbaseLiteError::Crypto);
+        let Some(ciphertext) = input.to_vec() else {
+            *cbl_error = Error::cbl_error(CouchbaseLiteError::Crypto).as_cbl_error();
+            return FLSliceResult::null();
+        };
+
+        let result = callback(
+            scope.to_string(),
+            collection.to_string(),
+            document_id.to_string(),
+            Dict::wrap(properties, &properties),
+            key_path.to_string(),
+            ciphertext,
+            algorithm.to_string(),
+            kid.to_string(),
+            &Error::default(),
+        );
+
+        match result {
+            Ok(plaintext) => FLSlice_Copy(from_bytes(&plaintext[..]).get_ref()),
+            Err(err) => {
+                *cbl_error = encryption_error_to_cbl(err).as_cbl_error();
+                FLSliceResult::null()
+            }
         }
-
-        if error != Error::default() {
-            *cbl_error = error.as_cbl_error();
-        }
-        result
     }
 }
 
+/// Internal storage handed to the C replicator as its `void* context`. The C callbacks cast
+/// this back to `&ReplicationConfigurationContext` to look up per-collection closures.
+///
+/// Built by [`Replicator::new`] from the public [`ReplicatorConfiguration`] — users do not
+/// construct this directly. Filter/resolver maps are populated by draining the per-collection
+/// callbacks out of each [`ReplicationCollection`]; encryptor/decryptor are moved off the
+/// configuration. Filters and the conflict resolver are keyed by `(scope_name,
+/// collection_name)` because the C callback signatures only receive the document, not the
+/// collection — see [`document_collection_key`].
 #[derive(Default)]
-pub struct ReplicationConfigurationContext {
-    pub push_filter: Option<ReplicationFilter>,
-    pub pull_filter: Option<ReplicationFilter>,
-    pub conflict_resolver: Option<ConflictResolver>,
+struct ReplicationConfigurationContext {
+    push_filters: HashMap<CollectionKey, ReplicationFilter>,
+    pull_filters: HashMap<CollectionKey, ReplicationFilter>,
+    conflict_resolvers: HashMap<CollectionKey, ConflictResolver>,
     #[cfg(feature = "enterprise")]
-    pub collection_property_encryptor: Option<CollectionPropertyEncryptor>,
+    collection_property_encryptor: Option<CollectionPropertyEncryptor>,
     #[cfg(feature = "enterprise")]
-    pub collection_property_decryptor: Option<CollectionPropertyDecryptor>,
+    collection_property_decryptor: Option<CollectionPropertyDecryptor>,
 }
 
 pub struct ReplicationCollection {
@@ -680,21 +559,34 @@ pub struct ReplicationCollection {
 }
 
 impl ReplicationCollection {
-    pub fn to_cbl_replication_collection(&self) -> CBLReplicationCollection {
+    /// Returns the `(scope_name, collection_name)` key used to look up this collection's
+    /// callbacks in [`ReplicationConfigurationContext`].
+    fn key(&self) -> CollectionKey {
+        (self.collection.scope().name(), self.collection.name())
+    }
+
+    /// Builds the C-side `CBLReplicationCollection`. Function pointers are set based on
+    /// what the context contains for this collection's key, so the C callback is only
+    /// installed for collections that actually have a closure registered.
+    fn to_cbl_replication_collection(
+        &self,
+        context: &ReplicationConfigurationContext,
+    ) -> CBLReplicationCollection {
+        let key = self.key();
         CBLReplicationCollection {
             collection: self.collection.get_ref(),
-            conflictResolver: self
-                .conflict_resolver
-                .as_ref()
-                .and(Some(c_replication_conflict_resolver)),
-            pushFilter: self
-                .push_filter
-                .as_ref()
-                .and(Some(c_replication_push_filter)),
-            pullFilter: self
-                .pull_filter
-                .as_ref()
-                .and(Some(c_replication_pull_filter)),
+            conflictResolver: context
+                .conflict_resolvers
+                .contains_key(&key)
+                .then_some(c_replication_conflict_resolver as _),
+            pushFilter: context
+                .push_filters
+                .contains_key(&key)
+                .then_some(c_replication_push_filter as _),
+            pullFilter: context
+                .pull_filters
+                .contains_key(&key)
+                .then_some(c_replication_pull_filter as _),
             channels: self.channels.get_ref(),
             documentIDs: self.document_ids.get_ref(),
         }
@@ -725,51 +617,57 @@ pub struct ReplicatorConfiguration {
     pub pinned_server_certificate: Option<Vec<u8>>,
 
     //** Auto Purge: */
-
     /** If auto purge is active, documents that the replicating user loses access to will be purged automatically.
-        If disableAutoPurge is true, this behavior is disabled and an access removed event will be sent to
-        document replication listeners if specified. Default is \ref kCBLDefaultReplicatorDisableAutoPurge.
+    If disableAutoPurge is true, this behavior is disabled and an access removed event will be sent to
+    document replication listeners if specified. Default is \ref kCBLDefaultReplicatorDisableAutoPurge.
 
-        \note Auto Purge is only applicable when replicating with Sync Gateway,
-              and will not be performed when a documentIDs filter is specified. */
+    \note Auto Purge is only applicable when replicating with Sync Gateway,
+          and will not be performed when a documentIDs filter is specified. */
     pub disable_auto_purge: bool,
 
     //** Retry Logic: */
-
     /// Max retry attempts where the initial connect to replicate counts toward the given value.
     pub max_attempts: u32,
     /// Max wait time between retry attempts in seconds.
     pub max_attempt_wait_time: u32,
 
     //** WebSocket: */
-
     /// The heartbeat interval in seconds.
     pub heartbeat: u32,
 
     //** */ HTTP settings: */
-
     /// Extra HTTP headers to add to the WebSocket request
     pub headers: HashMap<String, String>,
     /// HTTP client proxy settings
     pub proxy: Option<ProxySettings>,
     /** The option to remove the restriction that does not allow the replicator to save the parent-domain
-        cookies, the cookies whose domains are the parent domain of the remote host, from the HTTP
-        response. For example, when the option is set to true, the cookies whose domain are “.foo.com”
-        returned by “bar.foo.com” host will be permitted to save. This is only recommended if the host
-        issuing the cookie is well trusted.
+    cookies, the cookies whose domains are the parent domain of the remote host, from the HTTP
+    response. For example, when the option is set to true, the cookies whose domain are “.foo.com”
+    returned by “bar.foo.com” host will be permitted to save. This is only recommended if the host
+    issuing the cookie is well trusted.
 
-        This option is disabled by default (see \ref kCBLDefaultReplicatorAcceptParentCookies) which means
-        that the parent-domain cookies are not permitted to save by default. */
+    This option is disabled by default (see \ref kCBLDefaultReplicatorAcceptParentCookies) which means
+    that the parent-domain cookies are not permitted to save by default. */
     pub accept_parent_domain_cookies: bool,
 
     //** Advance TLS Settings: */
-
     /// Set of anchor certs (PEM format)
     pub trusted_root_certificates: Option<Vec<u8>>,
 
     /** Accept only self-signed certificates; any other certificates are rejected. */
     #[cfg(feature = "enterprise")]
     pub accept_only_self_signed_server_certificate: bool,
+
+    //** Property Encryption (Enterprise only): */
+    /// Callback invoked for every \ref Encryptable property in documents being pushed.
+    /// The callback receives the scope and collection so a single function can dispatch
+    /// per-collection if needed.
+    #[cfg(feature = "enterprise")]
+    pub collection_property_encryptor: Option<CollectionPropertyEncryptor>,
+
+    /// Callback invoked for every encrypted property in documents being pulled.
+    #[cfg(feature = "enterprise")]
+    pub collection_property_decryptor: Option<CollectionPropertyDecryptor>,
 }
 
 //======== LIFECYCLE
@@ -781,7 +679,10 @@ pub struct Replicator {
     cbl_ref: *mut CBLReplicator,
     pub config: Option<ReplicatorConfiguration>,
     pub headers: Option<MutableDict>,
-    pub context: Option<Box<ReplicationConfigurationContext>>,
+    /// Outlives the C replicator: CBL keeps the raw pointer to this box and dereferences
+    /// it from the C callbacks, so it must not move or drop until the replicator does.
+    #[allow(dead_code)]
+    context: Option<Box<ReplicationConfigurationContext>>,
     change_listeners: ReplicatorsListeners<ReplicatorChangeListener>,
     pub document_listeners: ReplicatorsListeners<ReplicatedDocumentListener>,
 }
@@ -794,17 +695,41 @@ impl CblRef for Replicator {
 }
 
 impl Replicator {
-    /** Creates a replicator with the given configuration. */
-    pub fn new(
-        config: ReplicatorConfiguration,
-        context: Box<ReplicationConfigurationContext>,
-    ) -> Result<Self> {
+    /** Creates a replicator with the given configuration.
+
+    Per-collection `push_filter`, `pull_filter` and `conflict_resolver` closures set on each
+    [`ReplicationCollection`] are drained into an internal context before the C replicator
+    is created. CBL's filter and conflict-resolver C callbacks only receive the document
+    (not the collection), so they look up the right closure by reading `(scope_name,
+    collection_name)` off the document via [`document_collection_key`]. */
+    pub fn new(mut config: ReplicatorConfiguration) -> Result<Self> {
         unsafe {
+            let mut context = Box::<ReplicationConfigurationContext>::default();
+
+            for c in &mut config.collections {
+                let key = c.key();
+                if let Some(f) = c.push_filter.take() {
+                    context.push_filters.insert(key.clone(), f);
+                }
+                if let Some(f) = c.pull_filter.take() {
+                    context.pull_filters.insert(key.clone(), f);
+                }
+                if let Some(r) = c.conflict_resolver.take() {
+                    context.conflict_resolvers.insert(key, r);
+                }
+            }
+
+            #[cfg(feature = "enterprise")]
+            {
+                context.collection_property_encryptor = config.collection_property_encryptor;
+                context.collection_property_decryptor = config.collection_property_decryptor;
+            }
+
             let headers = MutableDict::from_hashmap(&config.headers);
             let mut collections: Vec<CBLReplicationCollection> = config
                 .collections
                 .iter()
-                .map(ReplicationCollection::to_cbl_replication_collection)
+                .map(|c| c.to_cbl_replication_collection(&context))
                 .collect();
 
             let cbl_config = CBLReplicatorConfiguration {
@@ -845,7 +770,8 @@ impl Replicator {
                     .as_ref()
                     .map_or(slice::NULL_SLICE, |c| slice::from_bytes(c).get_ref()),
                 #[cfg(feature = "enterprise")]
-                acceptOnlySelfSignedServerCertificate: config.accept_only_self_signed_server_certificate,
+                acceptOnlySelfSignedServerCertificate: config
+                    .accept_only_self_signed_server_certificate,
                 //-- Property Encryption
                 #[cfg(feature = "enterprise")]
                 documentPropertyEncryptor: context
@@ -942,7 +868,7 @@ impl Replicator {
     /** Indicates which documents in the given collection have local changes that have not yet been
     pushed to the server by this replicator. This is of course a snapshot, that will go out of date
     as the replicator makes progress and/or documents are saved locally.
-    
+
     The result is, effectively, a set of document IDs: a dictionary whose keys are the IDs and
     values are `true`.
     If there are no pending documents, the dictionary is empty.
@@ -969,7 +895,7 @@ impl Replicator {
 
     /** Indicates whether the document with the given ID in the given collection has local changes
     that have not yet been pushed to the server by this replicator.
- 
+
     This is equivalent to, but faster than, calling \ref pending_document_ids and
     checking whether the result contains \p doc_id. See that function's documentation for details.
     @warning  If the given collection is not part of the replication, a NULL with an error will be returned. */
@@ -985,23 +911,6 @@ impl Replicator {
             check_error(&error).map(|_| result)
         }
     }
-
-    /** Indicates whether the document with the given ID has local changes that have not yet been
-    pushed to the server by this replicator.
-    This is equivalent to, but faster than, calling \ref pending_document_ids and
-    checking whether the result contains \p docID. See that function's documentation for details. */
-    /*pub fn is_document_pending_2(&self, collection: Collection, doc_id: &str) -> Result<bool> {
-        unsafe {
-            let mut error = CBLError::default();
-            let result = CBLReplicator_IsDocumentPending2(
-                self.get_ref(),
-                from_str(doc_id).get_ref(),
-                collection.get_ref(),
-                std::ptr::addr_of_mut!(error),
-            );
-            check_error(&error).map(|_| result)
-        }
-    }*/
 
     /**
      Adds a listener that will be called when the replicator's status changes.
@@ -1109,7 +1018,6 @@ impl From<CBLReplicatorStatus> for ReplicatorStatus {
 
 /** A callback that notifies you when the replicator's status changes. */
 pub type ReplicatorChangeListener = Box<dyn Fn(ReplicatorStatus)>;
-#[unsafe(no_mangle)]
 unsafe extern "C" fn c_replicator_change_listener(
     context: *mut ::std::os::raw::c_void,
     _replicator: *mut CBLReplicator,
