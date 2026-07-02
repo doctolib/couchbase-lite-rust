@@ -33,10 +33,22 @@ use crate::{
 use std::os::raw::c_uint;
 use crate::ListenerToken;
 
-/** Query languages. */
+/** Query languages */
 pub enum QueryLanguage {
-    JSON, // JSON query schema: github.com/couchbase/couchbase-lite-core/wiki/JSON-Query-Schema
-    N1QL, // N1QL syntax: docs.couchbase.com/server/6.0/n1ql/n1ql-language-reference/index.html
+    /**
+     * VOLATILE API : The JSON query language is a volatile API.  Volatile APIs are experimental and may likely be changed.
+     * They may also be used to indicate inherently private APIs that may be exposed, but "YMMV" (your mileage may vary)
+     * principles apply.
+     *
+     * See the [JSON query schema](https://github.com/couchbase/couchbase-lite-core/wiki/JSON-Query-Schema).
+     */
+    JSON,
+    /**
+     * SQL++ (formerly N1QL) query language.
+     *
+     * See the [N1QL language reference](https://docs.couchbase.com/couchbase-lite/current/c/query-n1ql-mobile.html).
+     */
+    N1QL,
 }
 
 type ChangeListener = Box<dyn Fn(&Query, &ListenerToken)>;

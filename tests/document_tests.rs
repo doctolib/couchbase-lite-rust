@@ -299,7 +299,7 @@ fn database_add_document_change_listener() {
 fn database_delete_document() {
     let (sender, receiver) = std::sync::mpsc::channel();
 
-    let context = ReplicationConfigurationContext {
+    let callbacks = utils::ReplicationTestCallbacks {
         push_filter: Some(Box::new(move |document, is_deleted, _is_access_removed| {
             if is_deleted && document.id() == "foo" {
                 sender.send(true).unwrap();
@@ -311,7 +311,7 @@ fn database_delete_document() {
 
     let mut tester = utils::ReplicationTwoDbsTester::new(
         utils::ReplicationTestConfiguration::default(),
-        Box::new(context),
+        callbacks,
     );
 
     tester.test(|local_db, central_db, _| {

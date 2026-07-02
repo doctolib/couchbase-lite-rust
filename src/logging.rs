@@ -19,8 +19,8 @@ use bitflags::bitflags;
 use crate::c_api::{
     kCBLLogDomainMaskAll, kCBLLogDomainMaskDatabase, kCBLLogDomainMaskListener,
     kCBLLogDomainMaskNetwork, kCBLLogDomainMaskQuery, kCBLLogDomainMaskReplicator,
-    CBLConsoleLogSink, CBLCustomLogSink, CBLLogDomain, CBLLogLevel, CBLLogSinks_SetConsole,
-    CBLLogSinks_SetCustom, FLString,
+    CBLConsoleLogSink, CBLCustomLogSink, CBLLogDomain, CBLLogLevel, CBLLogSinks_Console,
+    CBLLogSinks_CustomSink, CBLLogSinks_SetConsole, CBLLogSinks_SetCustom, FLString,
 };
 
 use enum_primitive::FromPrimitive;
@@ -109,6 +109,27 @@ pub fn set_custom_log_sink(log_sink: CustomLogSink) {
             callback: Some(invoke_log_callback),
             domains: log_sink.domains.bits() as u16,
         })
+    }
+}
+
+/** Returns the currently installed console log sink. */
+pub fn console_log_sink() -> ConsoleLogSink {
+    let sink = unsafe { CBLLogSinks_Console() };
+    ConsoleLogSink {
+        level: Level::from_u8(sink.level).unwrap_or(Level::None),
+        domains: DomainMask::from_bits_truncate(u32::from(sink.domains)),
+    }
+}
+
+/** Returns the currently installed custom log sink. The `callback` field is the value
+last passed to [`set_custom_log_sink`] (read from a Rust-side static, not from the C
+struct, which holds an internal trampoline). */
+pub fn custom_log_sink() -> CustomLogSink {
+    let sink = unsafe { CBLLogSinks_CustomSink() };
+    CustomLogSink {
+        level: Level::from_u8(sink.level).unwrap_or(Level::None),
+        callback: unsafe { LOG_CALLBACK },
+        domains: DomainMask::from_bits_truncate(u32::from(sink.domains)),
     }
 }
 
