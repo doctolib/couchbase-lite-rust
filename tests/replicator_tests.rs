@@ -34,7 +34,7 @@ use crate::utils::default_collection;
 fn push_replication() {
     let mut tester = utils::ReplicationTwoDbsTester::new(
         utils::ReplicationTestConfiguration::default(),
-        Box::new(ReplicationConfigurationContext::default()),
+        utils::ReplicationTestCallbacks::default(),
     );
 
     tester.test(|local_db, central_db, _| {
@@ -54,7 +54,7 @@ fn push_replication() {
 fn pull_replication() {
     let mut tester = utils::ReplicationTwoDbsTester::new(
         utils::ReplicationTestConfiguration::default(),
-        Box::new(ReplicationConfigurationContext::default()),
+        utils::ReplicationTestCallbacks::default(),
     );
 
     tester.test(|local_db, central_db, _| {
@@ -75,8 +75,8 @@ fn push_pull_replication() {
     let mut tester = utils::ReplicationThreeDbsTester::new(
         utils::ReplicationTestConfiguration::default(),
         utils::ReplicationTestConfiguration::default(),
-        Box::new(ReplicationConfigurationContext::default()),
-        Box::new(ReplicationConfigurationContext::default()),
+        utils::ReplicationTestCallbacks::default(),
+        utils::ReplicationTestCallbacks::default(),
     );
 
     tester.test(|local_db1, local_db2, central_db, _, _| {
@@ -105,10 +105,8 @@ fn pull_type_not_pushing() {
         ..Default::default()
     };
 
-    let mut tester = utils::ReplicationTwoDbsTester::new(
-        config,
-        Box::new(ReplicationConfigurationContext::default()),
-    );
+    let mut tester =
+        utils::ReplicationTwoDbsTester::new(config, utils::ReplicationTestCallbacks::default());
 
     tester.test(|local_db, central_db, _| {
         // Save doc in DB 1
@@ -130,10 +128,8 @@ fn push_type_not_pulling() {
         ..Default::default()
     };
 
-    let mut tester = utils::ReplicationTwoDbsTester::new(
-        config,
-        Box::new(ReplicationConfigurationContext::default()),
-    );
+    let mut tester =
+        utils::ReplicationTwoDbsTester::new(config, utils::ReplicationTestCallbacks::default());
 
     tester.test(|local_db, central_db, _| {
         // Save doc in central
@@ -159,10 +155,8 @@ fn document_ids() {
         ..Default::default()
     };
 
-    let mut tester = utils::ReplicationTwoDbsTester::new(
-        config,
-        Box::new(ReplicationConfigurationContext::default()),
-    );
+    let mut tester =
+        utils::ReplicationTwoDbsTester::new(config, utils::ReplicationTestCallbacks::default());
 
     tester.test(|local_db, central_db, _| {
         // Save doc 'foo' and 'foo2'
@@ -184,14 +178,14 @@ fn document_ids() {
 #[test]
 #[cfg(feature = "enterprise")]
 fn push_and_pull_filter() {
-    let context1 = ReplicationConfigurationContext {
+    let context1 = utils::ReplicationTestCallbacks {
         push_filter: Some(Box::new(|document, _is_deleted, _is_access_removed| {
             document.id() == "foo" || document.id() == "foo2"
         })),
         ..Default::default()
     };
 
-    let context2 = ReplicationConfigurationContext {
+    let context2 = utils::ReplicationTestCallbacks {
         pull_filter: Some(Box::new(|document, _is_deleted, _is_access_removed| {
             document.id() == "foo2" || document.id() == "foo3"
         })),
@@ -201,8 +195,8 @@ fn push_and_pull_filter() {
     let mut tester = utils::ReplicationThreeDbsTester::new(
         utils::ReplicationTestConfiguration::default(),
         utils::ReplicationTestConfiguration::default(),
-        Box::new(context1),
-        Box::new(context2),
+        context1,
+        context2,
     );
 
     tester.test(|local_db1, local_db2, central_db, _, _| {
@@ -242,7 +236,7 @@ fn push_and_pull_filter() {
 fn conflict_resolver() {
     let (sender, receiver) = std::sync::mpsc::channel();
 
-    let context1 = ReplicationConfigurationContext {
+    let context1 = utils::ReplicationTestCallbacks {
         conflict_resolver: Some(Box::new(
             move |_document_id, _local_document, remote_document| {
                 sender.send(true).unwrap();
@@ -251,13 +245,13 @@ fn conflict_resolver() {
         )),
         ..Default::default()
     };
-    let context2 = ReplicationConfigurationContext::default();
+    let context2 = utils::ReplicationTestCallbacks::default();
 
     let mut tester = utils::ReplicationThreeDbsTester::new(
         utils::ReplicationTestConfiguration::default(),
         utils::ReplicationTestConfiguration::default(),
-        Box::new(context1),
-        Box::new(context2),
+        context1,
+        context2,
     );
 
     tester.test(|local_db1, local_db2, central_db, repl1, _| {
@@ -332,7 +326,7 @@ fn conflict_resolver() {
 fn conflict_resolver_save_keep_local() {
     let mut tester = utils::ReplicationTwoDbsTester::new(
         utils::ReplicationTestConfiguration::default(),
-        Box::new(ReplicationConfigurationContext::default()),
+        utils::ReplicationTestCallbacks::default(),
     );
 
     tester.test(|local_db, central_db, repl| {
@@ -416,7 +410,7 @@ fn conflict_resolver_save_keep_local() {
 fn conflict_resolver_save_keep_remote() {
     let mut tester = utils::ReplicationTwoDbsTester::new(
         utils::ReplicationTestConfiguration::default(),
-        Box::new(ReplicationConfigurationContext::default()),
+        utils::ReplicationTestCallbacks::default(),
     );
 
     tester.test(|local_db, central_db, repl| {
@@ -499,6 +493,8 @@ fn conflict_resolver_save_keep_remote() {
 
 #[cfg(feature = "enterprise")]
 fn encryptor(
+    _scope: Option<String>,
+    _collection: Option<String>,
     _document_id: Option<String>,
     _properties: Dict,
     _key_path: Option<String>,
@@ -511,6 +507,8 @@ fn encryptor(
 }
 #[cfg(feature = "enterprise")]
 fn decryptor(
+    _scope: Option<String>,
+    _collection: Option<String>,
     _document_id: Option<String>,
     _properties: Dict,
     _key_path: Option<String>,
@@ -523,6 +521,8 @@ fn decryptor(
 }
 #[cfg(feature = "enterprise")]
 fn encryptor_err_temporary(
+    _scope: Option<String>,
+    _collection: Option<String>,
     _document_id: Option<String>,
     _properties: Dict,
     _key_path: Option<String>,
@@ -535,6 +535,8 @@ fn encryptor_err_temporary(
 }
 #[cfg(feature = "enterprise")]
 fn decryptor_err_temporary(
+    _scope: Option<String>,
+    _collection: Option<String>,
     _document_id: Option<String>,
     _properties: Dict,
     _key_path: Option<String>,
@@ -547,6 +549,8 @@ fn decryptor_err_temporary(
 }
 #[cfg(feature = "enterprise")]
 fn encryptor_err_permanent(
+    _scope: Option<String>,
+    _collection: Option<String>,
     _document_id: Option<String>,
     _properties: Dict,
     _key_path: Option<String>,
@@ -559,6 +563,8 @@ fn encryptor_err_permanent(
 }
 #[cfg(feature = "enterprise")]
 fn decryptor_err_permanent(
+    _scope: Option<String>,
+    _collection: Option<String>,
     _document_id: Option<String>,
     _properties: Dict,
     _key_path: Option<String>,
@@ -573,22 +579,22 @@ fn decryptor_err_permanent(
 #[test]
 #[cfg(feature = "enterprise")]
 fn encryption_ok_decryption_ok() {
-    let context1 = ReplicationConfigurationContext {
-        default_collection_property_encryptor: Some(encryptor),
-        default_collection_property_decryptor: Some(decryptor),
+    let context1 = utils::ReplicationTestCallbacks {
+        collection_property_encryptor: Some(encryptor),
+        collection_property_decryptor: Some(decryptor),
         ..Default::default()
     };
-    let context2 = ReplicationConfigurationContext {
-        default_collection_property_encryptor: Some(encryptor),
-        default_collection_property_decryptor: Some(decryptor),
+    let context2 = utils::ReplicationTestCallbacks {
+        collection_property_encryptor: Some(encryptor),
+        collection_property_decryptor: Some(decryptor),
         ..Default::default()
     };
 
     let mut tester = utils::ReplicationThreeDbsTester::new(
         utils::ReplicationTestConfiguration::default(),
         utils::ReplicationTestConfiguration::default(),
-        Box::new(context1),
-        Box::new(context2),
+        context1,
+        context2,
     );
 
     tester.test(|local_db1, local_db2, central_db, _, _| {
@@ -644,13 +650,13 @@ fn encryption_error_temporary() {
         ..Default::default()
     };
 
-    let context = ReplicationConfigurationContext {
-        default_collection_property_encryptor: Some(encryptor_err_temporary),
-        default_collection_property_decryptor: Some(decryptor),
+    let context = utils::ReplicationTestCallbacks {
+        collection_property_encryptor: Some(encryptor_err_temporary),
+        collection_property_decryptor: Some(decryptor),
         ..Default::default()
     };
 
-    let mut tester = utils::ReplicationTwoDbsTester::new(config.clone(), Box::new(context));
+    let mut tester = utils::ReplicationTwoDbsTester::new(config.clone(), context);
 
     tester.test(|local_db, central_db, repl| {
         // Save doc 'foo' with an encryptable property
@@ -679,13 +685,13 @@ fn encryption_error_temporary() {
     });
 
     // Change local DB 1 replicator to make the encryption work
-    let context = ReplicationConfigurationContext {
-        default_collection_property_encryptor: Some(encryptor),
-        default_collection_property_decryptor: Some(decryptor),
+    let context = utils::ReplicationTestCallbacks {
+        collection_property_encryptor: Some(encryptor),
+        collection_property_decryptor: Some(decryptor),
         ..Default::default()
     };
 
-    tester.change_replicator(config, Box::new(context));
+    tester.change_replicator(config, context);
 
     tester.test(|_, central_db, repl| {
         // Manually trigger the replication
@@ -707,13 +713,13 @@ fn decryption_error_temporary() {
         ..Default::default()
     };
 
-    let context = ReplicationConfigurationContext {
-        default_collection_property_encryptor: Some(encryptor),
-        default_collection_property_decryptor: Some(decryptor_err_temporary),
+    let context = utils::ReplicationTestCallbacks {
+        collection_property_encryptor: Some(encryptor),
+        collection_property_decryptor: Some(decryptor_err_temporary),
         ..Default::default()
     };
 
-    let mut tester = utils::ReplicationTwoDbsTester::new(config.clone(), Box::new(context));
+    let mut tester = utils::ReplicationTwoDbsTester::new(config.clone(), context);
 
     tester.test(|local_db, central_db, repl| {
         // Save doc 'foo' with an encrypted property in central
@@ -742,13 +748,13 @@ fn decryption_error_temporary() {
     });
 
     // Change local DB replicator to make the decryption work
-    let context = ReplicationConfigurationContext {
-        default_collection_property_encryptor: Some(encryptor),
-        default_collection_property_decryptor: Some(decryptor),
+    let context = utils::ReplicationTestCallbacks {
+        collection_property_encryptor: Some(encryptor),
+        collection_property_decryptor: Some(decryptor),
         ..Default::default()
     };
 
-    tester.change_replicator(config, Box::new(context));
+    tester.change_replicator(config, context);
 
     tester.test(|local_db, _, repl| {
         // Manually trigger the replication
@@ -770,13 +776,13 @@ fn encryption_error_permanent() {
         ..Default::default()
     };
 
-    let context = ReplicationConfigurationContext {
-        default_collection_property_encryptor: Some(encryptor_err_permanent),
-        default_collection_property_decryptor: Some(decryptor),
+    let context = utils::ReplicationTestCallbacks {
+        collection_property_encryptor: Some(encryptor_err_permanent),
+        collection_property_decryptor: Some(decryptor),
         ..Default::default()
     };
 
-    let mut tester = utils::ReplicationTwoDbsTester::new(config.clone(), Box::new(context));
+    let mut tester = utils::ReplicationTwoDbsTester::new(config.clone(), context);
 
     tester.test(|local_db, central_db, repl| {
         // Save doc 'foo' with an encryptable property
@@ -805,13 +811,13 @@ fn encryption_error_permanent() {
     });
 
     // Change local DB 1 replicator to make the encryption work
-    let context = ReplicationConfigurationContext {
-        default_collection_property_encryptor: Some(encryptor),
-        default_collection_property_decryptor: Some(decryptor),
+    let context = utils::ReplicationTestCallbacks {
+        collection_property_encryptor: Some(encryptor),
+        collection_property_decryptor: Some(decryptor),
         ..Default::default()
     };
 
-    tester.change_replicator(config, Box::new(context));
+    tester.change_replicator(config, context);
 
     tester.test(|_, central_db, repl| {
         // Manually trigger the replication
@@ -853,13 +859,13 @@ fn decryption_error_permanent() {
         ..Default::default()
     };
 
-    let context = ReplicationConfigurationContext {
-        default_collection_property_encryptor: Some(encryptor),
-        default_collection_property_decryptor: Some(decryptor_err_permanent),
+    let context = utils::ReplicationTestCallbacks {
+        collection_property_encryptor: Some(encryptor),
+        collection_property_decryptor: Some(decryptor_err_permanent),
         ..Default::default()
     };
 
-    let mut tester = utils::ReplicationTwoDbsTester::new(config.clone(), Box::new(context));
+    let mut tester = utils::ReplicationTwoDbsTester::new(config.clone(), context);
 
     tester.test(|local_db, central_db, repl| {
         // Save doc 'foo' with an encrypted property in central
@@ -888,13 +894,13 @@ fn decryption_error_permanent() {
     });
 
     // Change local DB replicator to make the decryption work
-    let context = ReplicationConfigurationContext {
-        default_collection_property_encryptor: Some(encryptor),
-        default_collection_property_decryptor: Some(decryptor),
+    let context = utils::ReplicationTestCallbacks {
+        collection_property_encryptor: Some(encryptor),
+        collection_property_decryptor: Some(decryptor),
         ..Default::default()
     };
 
-    tester.change_replicator(config, Box::new(context));
+    tester.change_replicator(config, context);
 
     tester.test(|local_db, _, repl| {
         // Manually trigger the replication
@@ -942,7 +948,7 @@ mod unsafe_test {
 
         let mut tester = utils::ReplicationTwoDbsTester::new(
             config.clone(),
-            Box::new(ReplicationConfigurationContext::default()),
+            utils::ReplicationTestCallbacks::default(),
         );
 
         tester.test(|local_db, central_db, repl| {

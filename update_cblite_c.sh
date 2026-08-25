@@ -299,7 +299,7 @@ rm -rf $tmpFolder
 
 echoGreen "Update version references"
 
-sed -i '' "s/^version = \".*\"/version = \"${version}-0\"/" Cargo.toml
+sed -i '' "/^\[package\]/,/^\[/s/^version = \".*\"/version = \"${version}-0\"/" Cargo.toml
 sed -i '' "s/couchbase_lite_c_version(), \".*\"/couchbase_lite_c_version(), \"${version}\"/" tests/lib_test.rs
 sed -i '' "s|mobile/[0-9]*\.[0-9]*\.[0-9]*/couchbase-lite-c|mobile/${version}/couchbase-lite-c|" README.md
 
