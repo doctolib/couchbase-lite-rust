@@ -367,6 +367,9 @@ fn database_document_expiration() {
             .expect("document_expiration");
         assert_eq!(doc_expiration.unwrap(), expiration);
 
+        let set_expiration = doc_expiration.unwrap().get();
+        assert_eq!(set_expiration, expiration.get());
+
         // Check the document is still present after 1 second
         sleep(Duration::from_secs(1));
         assert!(default_collection(db).get_document("foo").is_ok());
