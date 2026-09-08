@@ -8,3 +8,7 @@ Cargo.lock
 .DS_Store
 
 *.cblite2/
+
+# index_benchmark example output
+/bench_data/
+/bench_smoke/

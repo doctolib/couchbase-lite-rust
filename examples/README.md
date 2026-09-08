@@ -1,3 +1,57 @@
+# Examples
+
+## `index_benchmark` — offline index-migration benchmark (no Sync Gateway / Server)
+
+`index_benchmark.rs` measures how a sequence of index changes affects query performance and
+database size on a realistic, production-like data set, entirely locally.
+
+What it does:
+1. On first run, generates a persistent ~100 MB data set of billeo-style documents (1
+   `UserSettingsModel`, many `FactureModel`, fewer `FactureLibreModel`, a lot of
+   `EhrEncounterModel`, plus the supporting types). Subsequent runs reuse it.
+2. Drops every index, recreates the current production index set, and compacts.
+3. Runs every query (each shape/variation) `BENCH_RUNS` times and records the median/mean/min/max
+   plus the index each query actually uses (from `EXPLAIN`, all `USING INDEX` occurrences). The two
+   heavily-dynamic queries — `Facture.liste_factures` (`requete_liste_factures`) and
+   `BillForUi.find_by` — are reproduced by faithful clause builders (including the createdAt/patient
+   de-index pins and the injected all-statuses safety net) and expanded into the realistic frontend
+   combinations the user can produce (period, statut, patient, care plan, num, mode, payment-state,
+   the 11 `Billfilter` variants, etc.), so a single change of active filters is a distinct shape.
+   That is ~100 query shapes in total, not one per named query. Set `BENCH_DUMP_SQL=1` to print every
+   generated query and exit without running.
+4. Walks the migration steps (the trains from the CBLite indexing plan). For each step it applies
+   the index change, compacts, records on-disk size, **closes and reopens the database** — the
+   close runs CBLite's automatic `Optimize` (partial `ANALYZE`), which is what actually re-elects
+   query plans, so this reproduces production plan-flip behaviour rather than forcing deterministic
+   stats — then re-runs every query and writes a per-step report + CSV.
+5. Writes `report_OVERALL.md` answering: (a) did every query end up faster than baseline and by how
+   much, (b) did the database shrink, (c) did any query get slower from one step to the next.
+
+Run it (release strongly recommended; the first run generates the data set):
+
+```shell
+cargo run --release --example index_benchmark
+```
+
+Fast end-to-end smoke run:
+
+```shell
+BENCH_TARGET_MB=4 BENCH_RUNS=3 cargo run --example index_benchmark
+```
+
+Environment variables:
+- `BENCH_DIR` (default `./bench_data`) — where the database and the `report_*.md` / `timings_*.csv`
+  outputs are written.
+- `BENCH_TARGET_MB` (default `100`) — target size of the generated **document** data (the baseline
+  database is larger once all production indexes are built on top).
+- `BENCH_RUNS` (default `10`) — measured executions per query. A per-query wall-clock budget stops
+  pathological queries (e.g. an `ARRAY_CONTAINS` join no index can fix) early; the report notes how
+  many runs completed.
+
+To regenerate the data set from scratch, delete `bench_data/` (or your `BENCH_DIR`).
+
+---
+
 # Running examples with Couchbase Sync Gateway & Server
 
 Couchbase Lite is often used with replication to a central server, so it can be useful to test the full stack.
