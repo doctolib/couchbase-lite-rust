@@ -31,7 +31,7 @@ default-features = false # Disable features which are enabled by default
 features = ["user-hooks"]
 
 [build-dependencies]
-bindgen = "0.72.0"
+bindgen = "0.73.0"
 fs_extra = "1.2.0"
 
 [lib]
